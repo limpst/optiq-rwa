@@ -324,11 +324,11 @@ let lang = 'kr';
 try { lang = localStorage.getItem('optiq_lang') || 'kr'; } catch(e){}
 const isLocal = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
 try { const th = localStorage.getItem('optiq_theme'); if (th) document.documentElement.dataset.theme = th; else if (isLocal) document.documentElement.dataset.theme = 'light'; } catch(e){ if (isLocal) document.documentElement.dataset.theme='light'; }
-function toggleTheme(){ const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); const nx = cur==='dark'?'light':'dark'; document.documentElement.dataset.theme = nx; try{localStorage.setItem('optiq_theme',nx);}catch(e){} render(); }
+function toggleTheme(){ const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); const nx = cur==='dark'?'light':'dark'; document.documentElement.dataset.theme = nx; try{localStorage.setItem('optiq_theme',nx);}catch(e){} if(D) render(); }
 function t(k){ const v = T[k]; return v ? v[lang==='kr'?0:1] : k; }
 function g(term){ const v=G[term]; return v ? v[lang==='kr'?0:1] : ''; }
 function dfn(term, label){ return `<dfn data-g="${term}">${label||term}</dfn>`; }
-function setLang(l){ lang=l; try{localStorage.setItem('optiq_lang',l);}catch(e){} render(); }
+function setLang(l){ lang=l; try{localStorage.setItem('optiq_lang',l);}catch(e){} document.getElementById('btn-kr').setAttribute('aria-pressed',lang==='kr'); document.getElementById('btn-en').setAttribute('aria-pressed',lang==='en'); if(D) { render(); autoDfn(); } }
 const fmt = (x,d=2)=> (x===null||x===undefined||isNaN(x)) ? '–' : Number(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct = (x,d=1)=> (x===null||x===undefined||isNaN(x)) ? '–' : (100*x).toFixed(d)+'%';
 function table(cols, rows, cls, limit){ // cols: [{k,h,num,f,cls(row)}]; limit: rows shown before "show all"
@@ -372,14 +372,23 @@ function buildGlance(){
     [kr?'다음 이벤트':'Next event', ev?ev.event:'–', ev?`${ev.date} ${ev.time_utc} UTC (${ev.confidence})`:'', ev&&ev.confidence!=='confirmed'],
   ];
   document.getElementById('gcards').innerHTML=cards.map(c=>`<div class="gcard"><div class="k">${c[0]}</div><div class="v ${c[3]?'issue':''}" style="${c[3]?'padding:0 6px;border-radius:6px':''}">${c[1]}</div><div class="d">${c[2]}</div></div>`).join('');
+  // conclusions computed from data (real calibration, real curves, regime validation) so they stay true as data changes
+  const calB=(D.real.calibration||[]).filter(r=>r.coin==='BTC'&&r.kind==='call'&&r.m===1); const nB=calB.reduce((a,r)=>a+r.n,0);
+  const pbB=nB?calB.reduce((a,r)=>a+(r.payback_ask||0)*r.n,0)/nB:null, pbMid=nB?calB.reduce((a,r)=>a+(r.payback_mid||0)*r.n,0)/nB:null;
+  const bestCall=rt.filter(r=>r.coin==='BTC'&&r.idea==='1_yield_funded_calls').sort((a,b)=>(b.excess_vs_rwa??-9)-(a.excess_vs_rwa??-9))[0];
+  const shorts=rt.filter(r=>r.coin==='BTC'&&r.idea==='3_short_premium'&&(r.nights||0)>=60).sort((a,b)=>(b.excess_vs_rwa??-9)-(a.excess_vs_rwa??-9)); const bs=shorts[0];
+  const finOf=(cm,tag)=>{ const d=(cv.real||{})[`BTC|${cm}|${tag}`]; return d&&d.length?d[d.length-1].value:null; };
+  const tagOf=r=>r?`short ${r.params}`.replace('short m=','short m='):null; const bsTag=bs?('short '+bs.params):null;
+  const f0=bs?finOf('none',bsTag):null, fb=bs?finOf('base',bsTag):null, fs=bs?finOf('stress',bsTag):null;
+  const nvB=((D.regime||{}).validation_nav||{}).BTC||[]; const rfB=nvB.find(r=>r.strategy==='regime_follow'), asB=nvB.find(r=>r.strategy==='always_short');
   const concl= kr ? [
-    `지난 6개월 BTC 데일리 콜을 ask 에 사면 1달러당 0.59 를 돌려줬다. 매일 사는 전략은 RWA 이자보다 못하다.`,
-    `프리미엄 매도는 TC 전 +1.3% 였지만 base 수수료 뒤 +1.1%, stress 에서는 −0.5% 다. 꼬리 (skew −5) 때문에 DSR 은 0 이다.`,
-    `국면 라벨 (rich_iv) 은 "IV 가 비싸다" 는 맞히지만 "팔면 번다" 는 못 맞힌다. 실제 호가를 15분마다 쌓아 다시 잰다.`,
+    pbB!=null?`지난 6개월 BTC m=1 데일리 콜을 ask 에 사면 1달러당 ${fmt(pbB,2)} (mid 기준 ${fmt(pbMid,2)}) 를 돌려줬다 (${nB}밤). ${bestCall?`가장 좋은 매일 매수 설정도 RWA 대비 ${pct(bestCall.excess_vs_rwa,1)}p.`:''}`:'실데이터 calibration 없음.',
+    bs?`프리미엄 매도 (${humanParams(bs.params)}, ${bs.nights}밤) 최종 NAV: TC 없음 ${fmt(f0,4)} → base ${fmt(fb,4)} → stress ${fmt(fs,4)}. skew ${fmt(bs.skew,1)} 이라 DSR ${fmt(bs.dsr,2)}.`:'60밤 이상 매도 표본 없음.',
+    (rfB&&asB)?`국면 라벨: regime_follow IR ${fmt(rfB.ir_vs_rwa,2)} vs always_short ${fmt(asB.ir_vs_rwa,2)} → ${rfB.ir_vs_rwa>asB.ir_vs_rwa?'라벨이 매도 우위를 골라냈다':'라벨은 아직 신호가 아니다'}. 실제 호가를 15분마다 쌓아 다시 잰다.`:'라벨 검증 자료 없음.',
   ] : [
-    `Over six months BTC daily calls bought at the ask returned 0.59 per dollar; buying every night trails the RWA yield.`,
-    `Selling premium made +1.3% before costs, +1.1% after the base fee and −0.5% under stress; its fat left tail (skew −5) puts DSR at 0.`,
-    `The regime label says "IV is rich" correctly but not "selling pays". Real quotes are now stored every 15 minutes to re-measure.`,
+    pbB!=null?`Over six months BTC m=1 daily calls bought at the ask returned ${fmt(pbB,2)} per dollar (${fmt(pbMid,2)} at mid, ${nB} nights). ${bestCall?`The best daily-buy setting still trails RWA by ${pct(-bestCall.excess_vs_rwa,1)}.`:''}`:'No real calibration data.',
+    bs?`Selling premium (${humanParams(bs.params)}, ${bs.nights} nights) ends at NAV ${fmt(f0,4)} without TC → ${fmt(fb,4)} base → ${fmt(fs,4)} stress. Skew ${fmt(bs.skew,1)} puts DSR at ${fmt(bs.dsr,2)}.`:'No short sample with 60+ nights.',
+    (rfB&&asB)?`Regime label: regime_follow IR ${fmt(rfB.ir_vs_rwa,2)} vs always_short ${fmt(asB.ir_vs_rwa,2)} → ${rfB.ir_vs_rwa>asB.ir_vs_rwa?'the label picked the sell edge':'the label is not yet a signal'}. Real quotes are stored every 15 minutes to re-measure.`:'No label validation data.',
   ];
   document.getElementById('gconcl').innerHTML=concl.map(c=>`<li>${c}</li>`).join('');
   const todo= kr ? ['04:20 KST 첫 paper 주문 (자동) → 04:33 로그 확인','17:30 KST 첫 결제 · NAV · DB commit (자동) → 17:43 확인','Deribit read-only API key 로 .env 교체 (사용자)'] : ['04:20 KST first paper orders (auto) → check log 04:33','17:30 KST first settlement, NAV, DB commit (auto) → check 17:43','Replace .env with a read-only Deribit key (user)'];
