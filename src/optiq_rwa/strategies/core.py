@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..optimize.qubo import build_qubo, solve_greedy, solve_sa
+from ..optimize.qubo import build_qubo, polish, solve_greedy, solve_milp, solve_sa
 from ..risk.calibration import edge_model
 
 
@@ -58,6 +58,23 @@ def yield_funded_calls(chain, test_start, rwa_rate=0.045, m=1.0, mode="daily",
 
 
 # ---------------------------------------------------------------- idea 2
+def repair_selection(x, e, v, lam, k_units, night, coin):
+    """Make a (possibly soft-penalty) selection feasible: one strike per (night, coin), <= K units."""
+    x = np.asarray(x)[: len(e)] > 0
+    score = e - lam * v
+    best = {}
+    for i in np.flatnonzero(x):
+        key = (night[i], coin[i])
+        if key not in best or score[i] > score[best[key]]:
+            best[key] = i
+    keep = np.array(sorted(best.values()), dtype=int)
+    if len(keep) > k_units:
+        keep = keep[np.argsort(-score[keep])[:k_units]]
+    out = np.zeros(len(e), bool)
+    out[keep] = True
+    return out
+
+
 def qubo_event_selector(chain, test_start, rwa_rate=0.045, budget_mult=1.0, lam=0.5,
                         solver="sa", m_set=(0.0, 0.5, 1.0, 1.5), week=7, refit_every=28,
                         units_per_week=7, prior_n=60, seed=0, rho=0.7):
@@ -83,14 +100,15 @@ def qubo_event_selector(chain, test_start, rwa_rate=0.045, budget_mult=1.0, lam=
         unit = budget / units_per_week
         if solver == "sa":
             Q, n = build_qubo(e, v, cand.night.values, cand.coin.values, units_per_week, lam=lam, rho=rho)
-            x, _ = solve_sa(Q, sweeps=120, seed=seed + w0, restarts=1)
-            x = x[:n]
+            x, _ = solve_sa(Q, seed=seed + w0)           # tuned defaults: 500 sweeps x 4 restarts
+            x = repair_selection(x[:n], e, v, lam, units_per_week, cand.night.values, cand.coin.values)
+            x = polish(x, e, v, cand.night.values, cand.coin.values, units_per_week, lam=lam, rho=rho)
+        elif solver == "milp":
+            x = solve_milp(e, v, cand.night.values, cand.coin.values, units_per_week, lam=lam, rho=rho)
         else:
             x = solve_greedy(e, v, cand.night.values, cand.coin.values, units_per_week, lam=lam)
         x = x[: len(cand)]
-        if x.sum() > units_per_week:                              # repair (penalty is soft)
-            keep = np.argsort(-(e - lam * v) * x)[:units_per_week]
-            x = np.isin(np.arange(len(x)), keep) & (x > 0)
+        x = repair_selection(x, e, v, lam, units_per_week, cand.night.values, cand.coin.values)
         sel = cand[x > 0]
         for n in sorted(cand.night.unique()):
             nav += nav * rwa_rate / 365

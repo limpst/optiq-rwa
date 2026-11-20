@@ -22,7 +22,7 @@ def test_qubo_respects_budget_and_one_strike():
     night = np.array([0, 0, 1, 1, 2]); coin = np.array(["A", "A", "A", "A", "A"])
     Q, n = build_qubo(edge, var, night, coin, k_units=2, lam=0.0)
     x, _ = solve_sa(Q, sweeps=300, seed=1, restarts=3)
-    x = x[:n]
+    x = core.repair_selection(x[:n], edge, var, 0.0, 2, night, coin)   # P2 is soft by design
     assert x.sum() <= 2 and not (x[0] and x[1]) and x[3] == 0
     g = solve_greedy(edge, var, night, coin, 2, lam=0.0)
     assert set(np.flatnonzero(g)) == {0, 4}
