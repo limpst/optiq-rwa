@@ -1,0 +1,16 @@
+[project]
+name = "optiq-rwa"
+version = "0.1.0"
+description = "RWA yield + crypto daily (0DTE) option overlay optimisation"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "scipy", "tabulate", "pyarrow"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
