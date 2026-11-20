@@ -30,7 +30,7 @@
 |---|---|
 | 실데이터 | Deribit 체결 VWAP chain, BTC 201밤 · SOL 95밤 (2026-05-01 ~ 11-18) |
 | cost model | none · base (fee 0.03%/12.5% cap, 데일리 결제 수수료 면제) · stress (spread 2배, slippage +50%, 결제 수수료 0.015%) |
-| 수수료 출처 | 2차 자료 (jeangalea.com, coincodecap). support.deribit.com 요율표는 직접 확인 못 함 |
+| 수수료 출처 | Deribit 공식 요율표 (support.deribit.com, 2026-11-20 확인): Standard 3/3 bps · cap 12.5%, 데일리 결제 수수료 0, USDC 데일리 linear maker 0 bps |
 | DSR N | 같은 아이디어의 파라미터 설정 수 (실데이터: 코인 × cost model × 아이디어, sweep: 시나리오 × cost model × seed × 아이디어) |
 | 라벨 | `risk/regime.py` nearest-centroid, walk-forward 특징, 참조 = 합성 4 시나리오 |
 
@@ -107,7 +107,7 @@
 
 | 항목 | 상태 |
 |---|---|
-| Deribit 수수료 공식 확인 | 2차 자료. support.deribit.com 직접 확인 필요 |
+| Deribit 수수료 공식 확인 | 완료 (공식 페이지). combo 할인 (condor 윙 수수료 0) 은 아직 미반영 |
 | 실제 spread · depth | 라이브 snapshot 4개 (2026-11-20). 1주 이상 쌓인 뒤 spread 모델 교체 |
 | 라벨 → 매도 꼬리 | 꼬리 특징 (실현 점프 빈도 · skew) 추가 필요 |
 | paper 첫 주문 · 결제 | 2026-11-21 04:20 · 17:30 KST |

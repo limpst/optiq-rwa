@@ -1,10 +1,15 @@
 """Transaction-cost model for Deribit options (relative units: prices as fraction of spot).
 
-Fee schedule used (secondary sources, 2026-11-20; see README "거래비용"):
-  trading fee   0.03% of underlying notional per contract, for maker and taker alike,
-                capped at 12.5% of the option price          -> fee_rel = min(0.0003, 0.125 * price_rel)
-  settlement    0.015% of underlying, capped at 12.5% of option value, charged on ITM settlement;
-                daily options are reported exempt            -> settle_daily_exempt=True by default (0 for 0DTE)
+Fee schedule, verified on the official page https://support.deribit.com/hc/en-us/articles/25944746248989-Fees
+(read 2026-11-20, page "updated 8 days ago"), Standard tier:
+  trading fee   options 3 / 3 bps (maker / taker) of the underlying notional per contract, fee cap 12.5% of premium
+                -> fee_rel = min(0.0003, 0.125 * price_rel). USDC linear *daily* options: maker 0 bps / taker 3 bps
+                (10 Nov 2026 - 31 Jan 2027). The paper engine crosses the spread (taker), so 3 bps applies.
+                VIP tiers lower both the bps and the cap (VIP1 2.5 bps / 10.42% ... VIP5+ 1 bp / 4.17%).
+  combo         option combos with both buy and sell legs: the cheaper direction's fees are zeroed (iron condor
+                wings ride free); same-direction combos (strangle) get no discount. Not modelled yet (conservative).
+  settlement    BTC/ETH daily options 0%; "daily options are exempt from delivery fees"; non-daily options and USDC
+                linear options 0.015% capped at 12.5% of value -> settle_daily_exempt=True by default (0 for 0DTE)
   spread        already paid by filling at ask (buy) / bid (sell); `spread_mult` widens the half-spread
                 around mid for stress runs (2.0 = double the modelled spread of the historical chains)
   slippage      historical chains carry no depth -> `slip_rel` adds a fixed fraction of the half-spread;

@@ -58,7 +58,7 @@
 
 ### 거래비용 (TC) · SR / IR / MDD / DSR · 하이라이트 규칙 (2026-11-20 추가)
 
-- `src/optiq_rwa/backtest/costs.py`: Deribit 수수료 모형. 체결 수수료 = min(기초자산 0.03%, option 가격의 12.5%) (maker · taker 동일), 결제 수수료 0.015% (12.5% 상한, 데일리 option 은 면제 → 기본 0), spread 는 ask/bid 체결로 이미 반영. cost model: `none` · `base` · `stress` (spread 2배 + slippage 50% + 결제 수수료). 출처는 2차 자료 (support.deribit.com 요율표는 직접 열지 못함) — 확인 못 함.
+- `src/optiq_rwa/backtest/costs.py`: Deribit 수수료 모형. 체결 수수료 = min(기초자산 0.03%, option 가격의 12.5%) (maker · taker 동일), 결제 수수료 0.015% (12.5% 상한, 데일리 option 은 면제 → 기본 0), spread 는 ask/bid 체결로 이미 반영. cost model: `none` · `base` · `stress` (spread 2배 + slippage 50% + 결제 수수료). 출처: Deribit 공식 요율표 (support.deribit.com/hc/en-us/articles/25944746248989-Fees, 2026-11-20 확인). Standard tier 3/3 bps · cap 12.5%, USDC 데일리 linear option 은 maker 0 bps (2026-11-10 ~ 2027-01-31), taker 3 bps. 매수 + 매도 leg 가 섞인 combo (iron condor) 는 싼 쪽 수수료가 0 — 아직 모형에 넣지 않음 (보수적).
 - 0DTE OTM option 은 가격이 싸서 **12.5% 상한이 걸린다**. 1달러 프리미엄당 수수료 0.047 (SOL) ~ 0.083 (BTC) · stress 0.47.
 - `src/optiq_rwa/backtest/metrics.py`: SR (0 대비 Sharpe), IR (RWA 4.5% 대비), MDD, CVaR, skew · kurtosis, **DSR** (Bailey & López de Prado 2014 deflated Sharpe; RWA 초과수익 기준, N = 같은 아이디어의 파라미터 설정 수). 하이라이트 규칙: SR > 0 · IR > 0.5 · MDD ≥ −15% · DSR ≥ 0.95 · 60밤 이상.
 - 합성 sweep (TC 3종): 하이라이트 통과 8 / 588, 전부 events_underpriced 의 Idea 2. rich_iv 매도는 IR 1.4 이지만 skew −5 · kurtosis 40 때문에 DSR ≈ 0. 실데이터 BTC 는 통과 0. `results/SUMMARY.md`, `docs/REPORT_v0.3_risk_tc.md`.
