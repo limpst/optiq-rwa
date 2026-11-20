@@ -24,5 +24,8 @@ else:
     html = html.replace("</head>", marker + data + "</script>\n</head>", 1)
 out = pathlib.Path(a.out); out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(full_document(html))                      # browsable copy (docs/index.html, GitHub Pages)
-frag = out.with_name("artifact.html"); frag.write_text(html)   # artifact shape for claude.ai publish
-print("wrote", out, f"{out.stat().st_size/1e6:.2f} MB;", frag)
+# artifact: page without inline data + data.json beside it (published through the Artifact tool's `files`)
+slim = pre + marker + "null" + "</script>" + post if marker in html else html
+frag = out.with_name("artifact.html"); frag.write_text(slim)
+(out.parent / "data.json").write_text(data.replace("<\\/", "</"))
+print("wrote", out, f"{out.stat().st_size/1e6:.2f} MB;", frag, f"{frag.stat().st_size/1e6:.2f} MB; data.json {(out.parent / 'data.json').stat().st_size/1e6:.2f} MB")

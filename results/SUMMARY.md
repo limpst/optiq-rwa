@@ -4,136 +4,151 @@ Cost models: none / base (Deribit fee 0.03% notional, cap 12.5% of price; daily 
 
 Highlighted configs: 8 of 576 (scenario x cost model x config).
 
-| scenario           | cost_model   | idea                  | params                                               |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    dsr |   seed_min_ret |   n_nights |
-|:-------------------|:-------------|:----------------------|:-----------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|-------:|---------------:|-----------:|
-| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0} |       0.073  |          0.028  |   3.1636 |      1.1166 |        -0.0005 | 0.9896 |         0.0643 |        700 |
-| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0} |       0.064  |          0.019  |   4.6518 |      1.1588 |        -0.0005 | 0.983  |         0.0563 |        700 |
-| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'milp', 'lam': 0.5, 'budget_mult': 1.0}   |       0.0576 |          0.0126 |   6.4238 |      1.0864 |        -0.0005 | 0.9581 |         0.0517 |        700 |
-| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0}     |       0.0572 |          0.0122 |   6.3914 |      1.0538 |        -0.0005 | 0.9504 |         0.0517 |        700 |
-| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0} |       0.0794 |          0.0344 |   3.0402 |      1.2238 |        -0.0005 | 0.997  |         0.07   |        700 |
-| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0} |       0.0688 |          0.0238 |   4.4699 |      1.3398 |        -0.0005 | 0.9977 |         0.0603 |        700 |
-| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'milp', 'lam': 0.5, 'budget_mult': 1.0}   |       0.0603 |          0.0153 |   6.0635 |      1.249  |        -0.0005 | 0.9864 |         0.0536 |        700 |
-| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0}     |       0.0599 |          0.0149 |   6.0103 |      1.2091 |        -0.0005 | 0.9814 |         0.0536 |        700 |
+| scenario           | cost_model   | idea                  | params                                               |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |    kurt |    dsr |   seed_min_ret |   n_nights |
+|:-------------------|:-------------|:----------------------|:-----------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|--------:|-------:|---------------:|-----------:|
+| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0} |       0.073  |          0.028  |   3.1636 |      1.1166 |        -0.0005 | 16.9986 | 350.063 | 0.9896 |         0.0643 |        700 |
+| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0} |       0.064  |          0.019  |   4.6518 |      1.1588 |        -0.0005 | 14.749  | 277.68  | 0.983  |         0.0563 |        700 |
+| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'milp', 'lam': 0.5, 'budget_mult': 1.0}   |       0.0576 |          0.0126 |   6.4238 |      1.0864 |        -0.0005 | 12.3385 | 200.159 | 0.9581 |         0.0517 |        700 |
+| events_underpriced | base         | 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0}     |       0.0572 |          0.0122 |   6.3914 |      1.0538 |        -0.0005 | 12.3567 | 200.51  | 0.9504 |         0.0517 |        700 |
+| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0} |       0.0794 |          0.0344 |   3.0402 |      1.2238 |        -0.0005 | 16.9984 | 349.841 | 0.997  |         0.07   |        700 |
+| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0} |       0.0688 |          0.0238 |   4.4699 |      1.3398 |        -0.0005 | 14.3933 | 265.111 | 0.9977 |         0.0603 |        700 |
+| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'milp', 'lam': 0.5, 'budget_mult': 1.0}   |       0.0603 |          0.0153 |   6.0635 |      1.249  |        -0.0005 | 11.9364 | 186.3   | 0.9864 |         0.0536 |        700 |
+| events_underpriced | none         | 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0}     |       0.0599 |          0.0149 |   6.0103 |      1.2091 |        -0.0005 | 11.9012 | 185.18  | 0.9814 |         0.0536 |        700 |
 
 ## Scenario: base - cost model: none
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.0, 'mode': 'event_only', 'budget_mult': 3.0}         |       0.0574 |          0.0124 |   5.1315 |      0.9528 |        -0.0006 |   0.0759 |         0.0536 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}         |       0.0466 |          0.0016 |   4.1061 |      0.1262 |        -0.0005 |   0.5239 |         0.0405 |        700 |
-| 3_short_premium       | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0181 |         -0.0631 |  -0.2261 |     -0.8699 |        -0.0947 |   0      |        -0.0349 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.0, 'mode': 'event_only', 'budget_mult': 3.0}         |       0.0574 |          0.0124 |   5.1315 |      0.9528 |        -0.0006 | 13.9603 | 251.065  |   0.0759 |         0.0536 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}         |       0.0466 |          0.0016 |   4.1061 |      0.1262 |        -0.0005 | 16.136  | 338.406  |   0.5239 |         0.0405 |        700 |
+| 3_short_premium       | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0181 |         -0.0631 |  -0.2261 |     -0.8699 |        -0.0947 | -5.1623 |  43.3579 |   0      |        -0.0349 |        700 |
 
 
 ## Scenario: events_underpriced - cost model: none
 
-| idea                      | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:--------------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only                | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls      | {'m': 0.5, 'mode': 'event_only', 'budget_mult': 1.0}         |       0.0511 |          0.0061 |  17.8552 |      1.6969 |         0      |   0.2039 |         0.0501 |        700 |
-| **2_qubo_event_selector** | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0688 |          0.0238 |   4.4699 |      1.3398 |        -0.0005 |   0.9977 |         0.0603 |        700 |
-| 3_short_premium           | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |       0.0558 |          0.0108 |   0.8335 |      0.1708 |        -0.0677 |   0      |         0.0394 |        700 |
+| idea                      | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:--------------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only                | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls      | {'m': 0.5, 'mode': 'event_only', 'budget_mult': 1.0}         |       0.0511 |          0.0061 |  17.8552 |      1.6969 |         0      | 10.4203 | 151.935  |   0.2039 |         0.0501 |        700 |
+| **2_qubo_event_selector** | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0688 |          0.0238 |   4.4699 |      1.3398 |        -0.0005 | 14.3933 | 265.111  |   0.9977 |         0.0603 |        700 |
+| 3_short_premium           | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |       0.0558 |          0.0108 |   0.8335 |      0.1708 |        -0.0677 | -5.3151 |  45.7697 |   0      |         0.0394 |        700 |
 
 
 ## Scenario: fair_iv - cost model: none
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'event_only', 'budget_mult': 1.0}         |       0.05   |          0.005  |   9.0187 |      0.6474 |         0      |   0.1614 |         0.0475 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0437 |         -0.0013 |  12.3453 |     -0.1722 |        -0.0005 |   0.2112 |         0.0374 |        700 |
-| 3_short_premium       | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.09   |         -0.135  |  -1.275  |     -1.9004 |        -0.1884 |   0      |        -0.1066 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'event_only', 'budget_mult': 1.0}         |       0.05   |          0.005  |   9.0187 |      0.6474 |         0      | 18.0816 | 380.86   |   0.1614 |         0.0475 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0437 |         -0.0013 |  12.3453 |     -0.1722 |        -0.0005 | 13.6213 | 273.6    |   0.2112 |         0.0374 |        700 |
+| 3_short_premium       | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.09   |         -0.135  |  -1.275  |     -1.9004 |        -0.1884 | -5.0056 |  40.9927 |   0      |        -0.1066 |        700 |
 
 
 ## Scenario: rich_iv - cost model: none
 
-| idea                  | params                                                        |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:--------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                            |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 3.0}          |       0.0853 |          0.0403 |   0.2039 |     -0.2059 |        -0.0861 |   0.0003 |        -0.0354 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}          |       0.0419 |         -0.0031 |  33.1038 |     -3.6287 |        -0.0002 |   0.0193 |         0.0356 |        700 |
-| 3_short_premium       | {'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None} |       0.5339 |          0.4889 |   2.7534 |      2.4729 |        -0.1386 |   0.0288 |         0.5095 |        700 |
+| idea                  | params                                                        |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:--------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                            |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 3.0}          |       0.0853 |          0.0403 |   0.2039 |     -0.2059 |        -0.0861 | 20.7065 | 486.853  |   0.0003 |        -0.0354 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}          |       0.0419 |         -0.0031 |  33.1038 |     -3.6287 |        -0.0002 |  5.1898 |  97.5503 |   0.0193 |         0.0356 |        700 |
+| 3_short_premium       | {'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None} |       0.5339 |          0.4889 |   2.7534 |      2.4729 |        -0.1386 | -6.0658 |  59.816  |   0.0288 |         0.5095 |        700 |
 
 
 ## Scenario: base - cost model: base
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'event_only', 'budget_mult': 3.0}         |       0.0612 |          0.0162 |   3.5288 |      0.816  |        -0.0007 |   0.0032 |         0.0542 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}         |       0.0435 |         -0.0015 |   4.3518 |     -0.1177 |        -0.0005 |   0.4268 |         0.0361 |        700 |
-| 3_short_premium       | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0795 |         -0.1245 |  -1.1488 |     -1.7921 |        -0.1712 |   0      |        -0.0946 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'event_only', 'budget_mult': 3.0}         |       0.0612 |          0.0162 |   3.5288 |      0.816  |        -0.0007 | 17.3557 | 356.626  |   0.0032 |         0.0542 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}         |       0.0435 |         -0.0015 |   4.3518 |     -0.1177 |        -0.0005 | 16.1441 | 339.122  |   0.4268 |         0.0361 |        700 |
+| 3_short_premium       | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0795 |         -0.1245 |  -1.1488 |     -1.7921 |        -0.1712 | -5.1938 |  43.5489 |   0      |        -0.0946 |        700 |
 
 
 ## Scenario: events_underpriced - cost model: base
 
-| idea                      | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:--------------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only                | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls      | {'m': 0.5, 'mode': 'event_only', 'budget_mult': 1.0}         |       0.0506 |          0.0056 |  18.6268 |      1.5801 |         0      |   0.0408 |         0.0496 |        700 |
-| **2_qubo_event_selector** | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.064  |          0.019  |   4.6518 |      1.1588 |        -0.0005 |   0.983  |         0.0563 |        700 |
-| 3_short_premium           | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0131 |         -0.0581 |  -0.1592 |     -0.8217 |        -0.0872 |   0      |        -0.0277 |        700 |
+| idea                      | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:--------------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only                | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls      | {'m': 0.5, 'mode': 'event_only', 'budget_mult': 1.0}         |       0.0506 |          0.0056 |  18.6268 |      1.5801 |         0      | 10.5209 | 156.033  |   0.0408 |         0.0496 |        700 |
+| **2_qubo_event_selector** | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.064  |          0.019  |   4.6518 |      1.1588 |        -0.0005 | 14.749  | 277.68   |   0.983  |         0.0563 |        700 |
+| 3_short_premium           | {'m': 1.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0131 |         -0.0581 |  -0.1592 |     -0.8217 |        -0.0872 | -5.357  |  46.075  |   0      |        -0.0277 |        700 |
 
 
 ## Scenario: fair_iv - cost model: base
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 0.0, 'mode': 'bank_event', 'budget_mult': 1.0}         |       0.058  |          0.013  |   3.3473 |      0.5346 |        -0.0029 |   0.0493 |         0.0474 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.041  |         -0.004  |  13.6049 |     -0.4922 |        -0.0005 |   0.1119 |         0.0343 |        700 |
-| 3_short_premium       | {'m': 1.5, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0943 |         -0.1393 |  -1.8182 |     -2.6574 |        -0.1866 |   0      |        -0.1012 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 0.0, 'mode': 'bank_event', 'budget_mult': 1.0}         |       0.058  |          0.013  |   3.3473 |      0.5346 |        -0.0029 | 14.7669 | 311.321  |   0.0493 |         0.0474 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.041  |         -0.004  |  13.6049 |     -0.4922 |        -0.0005 | 13.3229 | 266.063  |   0.1119 |         0.0343 |        700 |
+| 3_short_premium       | {'m': 1.5, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0943 |         -0.1393 |  -1.8182 |     -2.6574 |        -0.1866 | -7.1384 |  74.0542 |   0      |        -0.1012 |        700 |
 
 
 ## Scenario: rich_iv - cost model: base
 
-| idea                  | params                                                        |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:--------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                            |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 1.0}          |       0.0575 |          0.0125 |   1.0195 |     -0.3287 |        -0.004  |   0.0001 |         0.0168 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}          |       0.0418 |         -0.0032 |  34.393  |     -3.9657 |        -0.0002 |   0.0153 |         0.0354 |        700 |
-| 3_short_premium       | {'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None} |       0.2895 |          0.2445 |   1.6714 |      1.3908 |        -0.1476 |   0      |         0.2714 |        700 |
+| idea                  | params                                                        |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:--------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                            |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 1.0}          |       0.0575 |          0.0125 |   1.0195 |     -0.3287 |        -0.004  | 20.2355 | 474.305  |   0.0001 |         0.0168 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}          |       0.0418 |         -0.0032 |  34.393  |     -3.9657 |        -0.0002 |  4.6167 |  87.6433 |   0.0153 |         0.0354 |        700 |
+| 3_short_premium       | {'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None} |       0.2895 |          0.2445 |   1.6714 |      1.3908 |        -0.1476 | -6.0946 |  60.1154 |   0      |         0.2714 |        700 |
 
 
 ## Scenario: base - cost model: stress
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 1.0}         |       0.0947 |          0.0497 |   1.3396 |      0.4462 |        -0.004  |   0      |         0.0455 |        700 |
-| 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0}             |       0.0421 |         -0.0029 |  33.3829 |     -0.898  |        -0.0003 |   0.1276 |         0.0398 |        700 |
-| 3_short_premium       | {'m': 2.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0794 |         -0.1244 |  -2.1816 |     -3.3787 |        -0.1507 |   0      |        -0.0879 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 1.0}         |       0.0947 |          0.0497 |   1.3396 |      0.4462 |        -0.004  | 20.1496 | 452.995  |   0      |         0.0455 |        700 |
+| 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0}             |       0.0421 |         -0.0029 |  33.3829 |     -0.898  |        -0.0003 | 11.4635 | 222.397  |   0.1276 |         0.0398 |        700 |
+| 3_short_premium       | {'m': 2.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0794 |         -0.1244 |  -2.1816 |     -3.3787 |        -0.1507 | -9.7794 | 130.02   |   0      |        -0.0879 |        700 |
 
 
 ## Scenario: events_underpriced - cost model: stress
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.0, 'mode': 'event_only', 'budget_mult': 3.0}         |       0.0582 |          0.0132 |   5.59   |      1.1054 |        -0.0006 |   0      |         0.0548 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0557 |          0.0107 |   4.8708 |      0.7682 |        -0.0005 |   0.8563 |         0.0521 |        700 |
-| 3_short_premium       | {'m': 2.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0656 |         -0.1106 |  -1.9031 |     -3.1758 |        -0.1269 |   0      |        -0.0738 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |     skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      |  -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.0, 'mode': 'event_only', 'budget_mult': 3.0}         |       0.0582 |          0.0132 |   5.59   |      1.1054 |        -0.0006 |  13.3037 | 234.839  |   0      |         0.0548 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0557 |          0.0107 |   4.8708 |      0.7682 |        -0.0005 |  16.5337 | 340.286  |   0.8563 |         0.0521 |        700 |
+| 3_short_premium       | {'m': 2.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0656 |         -0.1106 |  -1.9031 |     -3.1758 |        -0.1269 | -10.2233 | 140.969  |   0      |        -0.0738 |        700 |
 
 
 ## Scenario: fair_iv - cost model: stress
 
-| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 1.0}         |       0.0812 |          0.0362 |   1.2657 |      0.2423 |        -0.004  |   0      |         0.0355 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0347 |         -0.0103 |  17.8217 |     -1.5041 |        -0.0004 |   0.0118 |         0.0275 |        700 |
-| 3_short_premium       | {'m': 2.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0952 |         -0.1402 |  -2.4839 |     -3.6104 |        -0.1775 |   0      |        -0.1035 |        700 |
+| idea                  | params                                                       |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:-------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                           |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 1.0}         |       0.0812 |          0.0362 |   1.2657 |      0.2423 |        -0.004  | 20.266  | 461.335  |   0      |         0.0355 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0}         |       0.0347 |         -0.0103 |  17.8217 |     -1.5041 |        -0.0004 | 13.2632 | 276.991  |   0.0118 |         0.0275 |        700 |
+| 3_short_premium       | {'m': 2.0, 'frac': 0.5, 'skip_events': True, 'wing_m': None} |      -0.0952 |         -0.1402 |  -2.4839 |     -3.6104 |        -0.1775 | -9.3292 | 119.282  |   0      |        -0.1035 |        700 |
 
 
 ## Scenario: rich_iv - cost model: stress
 
-| idea                  | params                                                        |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |      dsr |   seed_min_ret |   n_nights |
-|:----------------------|:--------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|---------:|---------------:|-----------:|
-| 0_rwa_only            | {}                                                            |       0.046  |          0.001  | nan      |    nan      |         0      | nan      |         0.046  |        700 |
-| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 3.0}          |       0.0334 |         -0.0116 |  -0.1269 |     -0.692  |        -0.0962 |   0      |        -0.0505 |        700 |
-| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}          |       0.0415 |         -0.0035 |  39.9337 |     -5.2412 |        -0.0002 |   0.0031 |         0.0348 |        700 |
-| 3_short_premium       | {'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None} |      -0.3076 |         -0.3526 |  -2.1996 |     -2.4795 |        -0.5265 |   0      |        -0.3143 |        700 |
+| idea                  | params                                                        |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |    skew |     kurt |      dsr |   seed_min_ret |   n_nights |
+|:----------------------|:--------------------------------------------------------------|-------------:|----------------:|---------:|------------:|---------------:|--------:|---------:|---------:|---------------:|-----------:|
+| 0_rwa_only            | {}                                                            |       0.046  |          0.001  | nan      |    nan      |         0      | -0.0294 |   4.4013 | nan      |         0.046  |        700 |
+| 1_yield_funded_calls  | {'m': 1.5, 'mode': 'bank_event', 'budget_mult': 3.0}          |       0.0334 |         -0.0116 |  -0.1269 |     -0.692  |        -0.0962 | 18.749  | 438.153  |   0      |        -0.0505 |        700 |
+| 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0}          |       0.0415 |         -0.0035 |  39.9337 |     -5.2412 |        -0.0002 |  2.2395 |  50.7687 |   0.0031 |         0.0348 |        700 |
+| 3_short_premium       | {'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None} |      -0.3076 |         -0.3526 |  -2.1996 |     -2.4795 |        -0.5265 | -6.2171 |  61.539  |   0      |        -0.3143 |        700 |
 
+
+## Idea 3 - does the protective wing fix the tail? (base costs, mean over configs and seeds)
+
+| scenario           | wing     |   configs |   skew |    kurt |   worst_night |   max_drawdown |   ir_vs_rwa |   dsr_max |
+|:-------------------|:---------|----------:|-------:|--------:|--------------:|---------------:|------------:|----------:|
+| base               | none     |        36 | -7.734 |  90.792 |        -0.067 |         -0.303 |      -2.432 |         0 |
+| base               | wing 2.0 |        24 | -2.914 |  13.807 |        -0.019 |         -0.411 |      -7.423 |         0 |
+| events_underpriced | none     |        36 | -7.989 |  98.036 |        -0.07  |         -0.275 |      -2.117 |         0 |
+| events_underpriced | wing 2.0 |        24 | -2.94  |  13.579 |        -0.018 |         -0.376 |      -6.871 |         0 |
+| fair_iv            | none     |        36 | -7.384 |  82.696 |        -0.065 |         -0.359 |      -2.92  |         0 |
+| fair_iv            | wing 2.0 |        24 | -2.767 |  13.026 |        -0.019 |         -0.45  |      -8.179 |         0 |
+| rich_iv            | none     |        36 | -8.305 | 100.271 |        -0.055 |         -0.093 |      -0.049 |         0 |
+| rich_iv            | wing 2.0 |        24 | -4.064 |  27.938 |        -0.024 |         -0.194 |      -4.058 |         0 |
+
+Wings cut kurtosis and the worst night by roughly 4-5x but cost more premium than they save (IR falls); DSR stays ~0 either way because the left skew remains.
 
 ## Idea 2 - QUBO solver comparison (base costs)
 

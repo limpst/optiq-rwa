@@ -12,9 +12,9 @@ import pandas as pd
 
 from .metrics import HIGHLIGHT, add_dsr, highlight
 
-COLS = ["ann_return", "excess_vs_rwa", "ann_vol", "sharpe", "ir_vs_rwa", "sharpe_vs_rwa", "max_drawdown", "cvar5_night", "dsr"]
+COLS = ["ann_return", "excess_vs_rwa", "ann_vol", "sharpe", "ir_vs_rwa", "sharpe_vs_rwa", "max_drawdown", "cvar5_night", "worst_night", "skew", "kurt", "dsr"]
 KEYS = ["scenario", "cost_model", "idea", "params"]
-SHOW = ["idea", "params", "ann_return", "excess_vs_rwa", "sharpe", "ir_vs_rwa", "max_drawdown", "dsr", "seed_min_ret", "n_nights"]
+SHOW = ["idea", "params", "ann_return", "excess_vs_rwa", "sharpe", "ir_vs_rwa", "max_drawdown", "skew", "kurt", "dsr", "seed_min_ret", "n_nights"]
 DSR_GROUP = ("scenario", "cost_model", "seed", "idea")
 
 
@@ -48,6 +48,15 @@ def summarise(res: pd.DataFrame, calib: pd.DataFrame, perp: pd.DataFrame, out: p
             best = (g.sort_values("ir_vs_rwa", ascending=False).groupby("idea").head(1).sort_values("idea"))
             lines.append(_fmt(best))
             lines.append("")
+    # idea 3: do wings fix the tail? (base costs) skew / kurtosis / worst night / IR / DSR with vs without wing
+    sp = res[(res.idea == "3_short_premium") & (res.cost_model == "base")].copy()
+    if not sp.empty:
+        sp["wing"] = sp.params.str.extract(r"'wing_m': ([\d.]+|None)")[0].map(lambda v: "none" if v == "None" else f"wing {v}")
+        tail = sp.groupby(["scenario", "wing"]).agg(configs=("skew", "size"), skew=("skew", "mean"), kurt=("kurt", "mean"), worst_night=("worst_night", "mean"),
+                                                   max_drawdown=("max_drawdown", "mean"), ir_vs_rwa=("ir_vs_rwa", "mean"), dsr_max=("dsr", "max")).reset_index()
+        lines.append("\n## Idea 3 - does the protective wing fix the tail? (base costs, mean over configs and seeds)\n")
+        lines.append(tail.round(3).to_markdown(index=False))
+        lines.append("\nWings cut kurtosis and the worst night by roughly 4-5x but cost more premium than they save (IR falls); DSR stays ~0 either way because the left skew remains.")
     q = avg[(avg.idea == "2_qubo_event_selector") & (avg.cost_model == "base")]
     lines.append("\n## Idea 2 - QUBO solver comparison (base costs)\n")
     lines.append(q[["scenario", "params", "ann_return", "excess_vs_rwa", "sharpe", "ir_vs_rwa", "dsr", "payback_ask"]].round(4).to_markdown(index=False))
