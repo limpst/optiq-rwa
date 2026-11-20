@@ -169,7 +169,13 @@ def build_bundle(con=None) -> dict:
     vol_hist = store.read(con, "SELECT date, base, volume_usd FROM volume_daily ORDER BY date")
     navs = paper_nav_series(con)
     periods = {k: {f: _records(period_table(v, f, SETTINGS.rwa_rate).round(6)) for f in ("W", "M")} for k, v in navs.items() if len(v) > 1}
+    try:
+        from ..paper.engine import preview
+        prev = _records(preview(con).round(4))
+    except Exception as e:
+        prev = [{"error": str(e)[:120]}]
     paper = {
+        "preview": prev,
         "nav": _records(store.read(con, "SELECT * FROM paper_nav ORDER BY date")),
         "nav_series": {k: _series(v.reset_index(), "date", "nav", ms=False) for k, v in navs.items()},
         "orders": _records(store.read(con, "SELECT * FROM paper_orders ORDER BY order_id DESC LIMIT 100").round(4)),

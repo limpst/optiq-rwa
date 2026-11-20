@@ -32,6 +32,8 @@ from ..data.live import index_name_of, live_chain
 STRATEGIES = {
     "yield_calls": dict(m=1.0, budget_mult=1.0),
     "short_condor": dict(m=1.5, wing_m=2.5, frac=0.25),
+    # regime_switch: rich_iv -> short_condor legs, otherwise yield_calls only on event nights (risk.regime.classify_live)
+    "regime_switch": dict(m=1.0, budget_mult=3.0, short_m=1.5, wing_m=2.5, frac=0.25),
 }
 TOL_M = 0.35          # accept strikes within this distance of the target m
 
@@ -60,6 +62,61 @@ def _nearest(chain: pd.DataFrame, kind: str, m_target: float, need: str = "both"
 def _contract_size(con, name) -> float:
     r = con.execute("SELECT contract_size, inverse, min_trade_amount FROM instruments WHERE instrument_name=?", (name,)).fetchone()
     return (r[0] or 1.0), bool(r[1]), (r[2] or 0.0)
+
+
+def plan_orders(con, name, p, chains, nav, date=None) -> list[dict]:
+    """Pure planning: the orders a strategy would send on these chains at this NAV. No DB writes."""
+    plan = []
+    if name == "yield_calls" or (name == "regime_switch" and _regime_mode(con, date) == "buy_events"):
+        if name == "regime_switch" and not _is_event_day(date):
+            return plan
+        budget = nav * SETTINGS.rwa_rate / 365 * p["budget_mult"]
+        per = budget / max(len(chains), 1)
+        for b, ch in chains.items():
+            row = _nearest(ch, "call", p["m"], need="ask")
+            if row is not None:
+                plan.append(dict(base=b, row=row, side="buy", usd=per, note=f"m={row.m:.2f} target={p['m']}"))
+    elif name == "short_condor" or (name == "regime_switch" and _regime_mode(con, date) == "sell"):
+        m, wing, frac = (p.get("short_m", p.get("m")), p["wing_m"], p["frac"])
+        per_leg = nav * frac / max(len(chains), 1)
+        for b, ch in chains.items():
+            legs = [("call", m, "sell"), ("put", -m, "sell"), ("call", wing, "buy"), ("put", -wing, "buy")]
+            rows = [(_nearest(ch, k, mm, need="bid" if side == "sell" else "ask", outward=0.0 if side == "sell" else 2.0), side) for k, mm, side in legs]
+            if any(r is None for r, _ in rows):
+                continue
+            units = per_leg / float(ch.spot.iloc[0])
+            for r, side in rows:
+                cs, _, _ = _contract_size(con, r.instrument_name)
+                px = float(r.ask if side == "buy" else r.bid)
+                plan.append(dict(base=b, row=r, side=side, usd=units * px * cs, note=f"m={r.m:.2f}"))
+    return plan
+
+
+_REGIME_CACHE: dict = {}
+
+
+def _regime_mode(con, date) -> str:
+    """'sell' when the live regime is rich_iv for the majority of classified bases, else 'buy_events'. Cached per date."""
+    if date in _REGIME_CACHE:
+        return _REGIME_CACHE[date]
+    mode = "buy_events"
+    try:
+        from ..risk.regime import classify_live
+        live = classify_live(con)
+        if not live.empty and (live.label == "rich_iv").mean() >= 0.5:
+            mode = "sell"
+    except Exception:
+        pass
+    _REGIME_CACHE[date] = mode
+    return mode
+
+
+def _is_event_day(date) -> bool:
+    try:
+        from ..data.events import event_dates
+        return pd.Timestamp(date).date() in event_dates(("FOMC", "CPI"))
+    except Exception:
+        return False
 
 
 def _place(con, snap_id, ts, date, strategy, row, side, usd_target, note=""):
@@ -118,32 +175,41 @@ def trade(con=None, nav0=1_000_000.0, min_hours=6.0, max_hours=26.0, strategies=
             log(f"{name}: no expiry within [{min_hours},{max_hours}]h for {bases}; nothing to do")
             continue
         cash, n = 0.0, 0
-        if name == "yield_calls":
-            budget = nav * SETTINGS.rwa_rate / 365 * p["budget_mult"]
-            per = budget / len(chains)
-            for b, ch in chains.items():
-                row = _nearest(ch, "call", p["m"], need="ask")
-                if row is not None:
-                    cash += _place(con, snap_id, ts, date, name, row, "buy", per, f"m={row.m:.2f} target={p['m']}")
-                    n += 1
-        elif name == "short_condor":
-            per_leg = nav * p["frac"] / len(chains)                   # USD notional per leg
-            for b, ch in chains.items():
-                legs = [("call", p["m"], "sell"), ("put", -p["m"], "sell"), ("call", p["wing_m"], "buy"), ("put", -p["wing_m"], "buy")]
-                rows = [(_nearest(ch, k, m, need="bid" if side == "sell" else "ask", outward=0.0 if side == "sell" else 2.0), side)
-                        for k, m, side in legs]
-                if any(r is None for r, _ in rows):
-                    continue
-                units = per_leg / float(ch.spot.iloc[0])             # number of underlying units
-                for r, side in rows:
-                    cs, _, _ = _contract_size(con, r.instrument_name)
-                    px = float(r.ask if side == "buy" else r.bid)
-                    cash += _place(con, snap_id, ts, date, name, r, side, units * px * cs, f"m={r.m:.2f}")
-                    n += 1
+        for o in plan_orders(con, name, p, chains, nav, date):
+            cash += _place(con, snap_id, ts, date, name, o["row"], o["side"], o["usd"], o["note"])
+            n += 1
         con.commit()
         out[name] = dict(date=date, snap_id=snap_id, nav_before=nav, orders=n, cash_flow_usd=round(cash, 2), bases=list(chains))
         log(json.dumps(out[name]))
     return out
+
+
+def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.DataFrame:
+    """What each strategy would order on the latest snapshot right now (no writes). For the dashboard."""
+    con = con or store.connect()
+    snap_id = store.latest_snap_id(con)
+    if snap_id is None:
+        return pd.DataFrame()
+    ts, date = con.execute("SELECT ts_ms, date FROM snapshots WHERE snap_id=?", (snap_id,)).fetchone()
+    bases = tradable_bases(con, date)
+    chains = {}
+    for b in bases:
+        for rank in (0, 1):
+            ch = live_chain(con, snap_id, b, rank)
+            if not ch.empty and min_hours <= ch.hours.iloc[0] <= max_hours:
+                chains[b] = ch
+                break
+    rows = []
+    for name, p in STRATEGIES.items():
+        nav = current_nav(con, name, nav0)
+        for o in plan_orders(con, name, p, chains, nav, date):
+            r = o["row"]
+            cs, _, min_amt = _contract_size(con, r.instrument_name)
+            px = float(r.ask if o["side"] == "buy" else r.bid)
+            rows.append(dict(strategy=name, base=o["base"], instrument_name=r.instrument_name, side=o["side"], m=round(float(r.m), 2),
+                             px_usd=px, qty=o["usd"] / (px * cs) if px > 0 else np.nan, usd=o["usd"], hours=round(float(r.hours), 1),
+                             spot=float(r.spot), quote_source=r.quote_source, min_trade_amount=min_amt, regime_mode=_regime_mode(con, date) if name == "regime_switch" else ""))
+    return pd.DataFrame(rows)
 
 
 def settle(con=None, log=print) -> int:
@@ -206,7 +272,7 @@ def book(con=None) -> dict:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["trade", "settle", "nav", "book"])
+    ap.add_argument("cmd", choices=["trade", "settle", "nav", "book", "preview"])
     ap.add_argument("--nav", type=float, default=1_000_000.0)
     ap.add_argument("--min-hours", type=float, default=6.0)
     ap.add_argument("--max-hours", type=float, default=26.0)
@@ -215,6 +281,8 @@ if __name__ == "__main__":
     pd.set_option("display.width", 220, "display.max_columns", 30)
     if a.cmd == "trade":
         trade(con, a.nav, a.min_hours, a.max_hours)
+    elif a.cmd == "preview":
+        print(preview(con, a.nav).round(4).to_string(index=False))
     elif a.cmd == "settle":
         settle(con)
     elif a.cmd == "nav":

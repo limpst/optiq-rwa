@@ -116,6 +116,7 @@ a{color:var(--accent-2)}
     <div class="panel"><div class="chart" id="ch-nav"></div><div class="legend" id="lg-nav"></div><p class="cap" data-t="cap_nav"></p></div>
     <div class="panel"><h3 data-t="h_periods"></h3><div class="ctl"><select id="sel-period"><option value="W">Weekly</option><option value="M">Monthly</option></select><select id="sel-strat"></select></div><div class="tbl" id="periods"></div><p class="cap" data-t="cap_periods"></p></div>
   </div>
+  <div class="panel"><h3 data-t="h_preview"></h3><div class="tbl" id="preview"></div><p class="cap" data-t="cap_preview"></p></div>
   <div class="panel"><h3 data-t="h_orders"></h3><div class="tbl" id="orders"></div><p class="cap" data-t="cap_orders"></p></div>
 
   <h2 data-t="h_real"></h2>
@@ -193,6 +194,8 @@ const T = {
  h_universe:["Universe · 거래량 필터","Universe · volume filter"], cap_universe:["Deribit 24h option 거래량 (USD → 억 원). 10억 원 미만은 이슈 색. 미달 base 는 전략에서 빼고 focus base (SOL_USDC) 만 예외로 수집한다.","Deribit 24h option volume (USD → KRW 100M). Below KRW 1bn is flagged. Failing bases are excluded from strategies, except focus bases (SOL_USDC)."],
  h_paper:["Paper book (dry-run)","Paper book (dry-run)"], cap_nav:["전략별 paper NAV (USD). 열린 포지션은 0 으로 평가해 보수적이다.","Paper NAV per strategy (USD). Open positions carried at zero (conservative)."],
  h_periods:["기간별 수익","Period returns"], cap_periods:["주 · 월 단위 수익, RWA 대비 초과, 최대 낙폭. 자료가 1일뿐이면 비어 있다.","Weekly / monthly return, excess over RWA, max drawdown. Empty until more than one day of NAV."],
+ h_preview:["지금 주문한다면 (dry-run preview, 기록 안 함)","If we ordered now (dry-run preview, not recorded)"],
+ cap_preview:["최신 snapshot 호가로 세 전략이 지금 낼 주문. regime_switch 는 국면이 rich_iv 면 condor 매도, 아니면 이벤트 밤에만 콜 매수. 예약 주문 (04:20 KST) 과 달리 저장하지 않는다. 4개 leg 호가가 다 없으면 condor 는 비어 있다.","Orders the three strategies would place on the latest snapshot. regime_switch sells a condor when the regime is rich_iv, else buys calls on event nights only. Unlike the 04:20 KST job nothing is recorded. The condor is empty when any of its four legs lacks a quote."],
  h_orders:["최근 dry-run 주문","Recent dry-run orders"], cap_orders:["매수는 best ask, 매도는 best bid 로 가상 체결. status=rejected 는 호가 없음.","Buys fill at best ask, sells at best bid. status=rejected means no quote."],
  h_real:["실데이터 backtest (Deribit 체결 이력)","Real-data backtest (Deribit trade history)"], cap_real:["BTC · SOL 과거 체결 VWAP 으로 만든 chain 에 아이디어 1 · 3 을 적용한 NAV. 시작 1.0.","NAV of ideas 1 and 3 on chains built from BTC / SOL trade VWAPs. Start 1.0."],
  h_calib:["Idea 4 · 확률 보정","Idea 4 · probability calibration"], cap_calib:["m 구간별 모델 ITM 확률 (연한 막대) 과 실제 ITM 비율 (진한 막대). 실제가 낮으면 call 이 비싸다는 뜻.","Model ITM probability (light) vs realised ITM rate (dark) per m bucket. Realised below model means calls are rich."],
@@ -403,6 +406,8 @@ function render(){
   const ss=document.getElementById('sel-strat'); const strats=Object.keys(D.periods||{}); ss.innerHTML=strats.length?strats.map(s=>`<option>${s}</option>`).join(''):'<option>–</option>';
   const drawPeriods=()=>{ const p=(D.periods[ss.value]||{})[document.getElementById('sel-period').value]||[]; document.getElementById('periods').innerHTML=p.length?table([{k:'period',h:'period'},{k:'n_days',h:'days',num:true},{k:'ret',h:'return',num:true,f:v=>pct(v,2),cls:r=>r.ret<0?'issue':''},{k:'excess',h:'vs RWA',num:true,f:v=>pct(v,2)},{k:'max_dd',h:'MDD',num:true,f:v=>pct(v,2)},{k:'worst_day',h:'worst day',num:true,f:v=>pct(v,2)}],p):`<p class="cap">${lang==='kr'?'NAV 가 2일 이상 쌓이면 표시.':'Shown once NAV spans 2+ days.'}</p>`; };
   ss.onchange=drawPeriods; document.getElementById('sel-period').onchange=drawPeriods; drawPeriods();
+  const pv=(D.paper.preview||[]).filter(r=>!r.error);
+  document.getElementById('preview').innerHTML=pv.length?table([{k:'strategy',h:'strategy'},{k:'base',h:'base'},{k:'instrument_name',h:'instrument'},{k:'side',h:'side',cls:r=>r.side==='sell'?'warn':''},{k:'m',h:'m',num:true,f:v=>fmt(v,2)},{k:'px_usd',h:'px (USD)',num:true,f:v=>fmt(v,4)},{k:'qty',h:'qty',num:true,f:v=>fmt(v,3),cls:r=>(r.qty<r.min_trade_amount)?'issue':''},{k:'usd',h:'USD',num:true,f:v=>fmt(v,2)},{k:'hours',h:'h to expiry',num:true,f:v=>fmt(v,1)},{k:'quote_source',h:'quote'},{k:'regime_mode',h:'regime'}],pv):`<p class="cap">${lang==='kr'?'지금 호가로는 낼 주문이 없다 (만기 1~30시간 chain 에 조건 맞는 strike 없음).':'No orders on current quotes (no strike meets the rules within 1-30h to expiry).'}</p>`;
   document.getElementById('orders').innerHTML=(D.paper.orders||[]).length?table([{k:'date',h:'date'},{k:'strategy',h:'strategy'},{k:'instrument_name',h:'instrument'},{k:'side',h:'side'},{k:'qty',h:'qty',num:true,f:v=>fmt(v,3)},{k:'fill_px',h:'fill (USD)',num:true,f:v=>fmt(v,4)},{k:'fill_usd',h:'USD',num:true,f:v=>fmt(v,2)},{k:'status',h:'status',cls:r=>r.status==='filled'?'':'issue'},{k:'note',h:'note'}],D.paper.orders.slice(0,30)):`<p class="cap">${lang==='kr'?'아직 주문 없음.':'No orders yet.'}</p>`;
   // real
   lines('ch-real', D.real.nav_series||{}, 'lg-real', {type:'price',precision:4,minMove:0.0001});
