@@ -56,6 +56,21 @@
 - `data/events.csv` + `src/optiq_rwa/data/events.py`: FOMC 2026 (8회, 확정) · 2027 (8회, tentative) · US CPI 2026~27-02 (BLS) · HYPE 언락 (uncertain). 19:20 UTC 진입이면 FOMC · CPI 수치는 이미 나온 뒤라 "event night" 은 사후 움직임이다.
 - 실데이터 재실행: BTC event night 7밤의 m=1 콜은 전부 0 으로 끝났다 (payback 0). event_only 매수도 RWA 에 못 미쳤다 (−0.8%p). 합성 sweep 의 "이벤트 과소평가" 가정은 지난 6개월 BTC 에서는 성립하지 않았다 (n=7, 참고만).
 
+### 거래비용 (TC) · SR / IR / MDD / DSR · 하이라이트 규칙 (2026-11-20 추가)
+
+- `src/optiq_rwa/backtest/costs.py`: Deribit 수수료 모형. 체결 수수료 = min(기초자산 0.03%, option 가격의 12.5%) (maker · taker 동일), 결제 수수료 0.015% (12.5% 상한, 데일리 option 은 면제 → 기본 0), spread 는 ask/bid 체결로 이미 반영. cost model: `none` · `base` · `stress` (spread 2배 + slippage 50% + 결제 수수료). 출처는 2차 자료 (support.deribit.com 요율표는 직접 열지 못함) — 확인 못 함.
+- 0DTE OTM option 은 가격이 싸서 **12.5% 상한이 걸린다**. 1달러 프리미엄당 수수료 0.047 (SOL) ~ 0.083 (BTC) · stress 0.47.
+- `src/optiq_rwa/backtest/metrics.py`: SR (0 대비 Sharpe), IR (RWA 4.5% 대비), MDD, CVaR, skew · kurtosis, **DSR** (Bailey & López de Prado 2014 deflated Sharpe; RWA 초과수익 기준, N = 같은 탐색의 설정 수). 하이라이트 규칙: SR > 0 · IR > 0.5 · MDD ≥ −15% · DSR ≥ 0.95 · 60밤 이상.
+- paper 엔진: 체결 시 `fee_usd` · `slippage_usd` (depth 5 호가를 걸어 VWAP 체결) · `levels_used` 기록, NAV 에서 수수료 차감. `preview` 로 지금 주문 시 수수료를 미리 본다.
+- QUBO: SA 가 greedy 보다 못하던 원인은 soft 예산 벌점 (P2 = 2×scale) 이 첫 flip 을 전부 막은 것. P2 = 0.1×scale, 500 sweeps × 4 restarts + repair + polish 로 MILP 와 같은 해 (gap 0.00%). `solver="milp"` 추가. 벤치: `results/qubo_bench.md`.
+
+### 국면 라벨 검증 (2026-11-20, `scripts/run_regime_validation.py`)
+
+- BTC 202밤: rich_iv 밤의 strangle 매도 P&L (+0.0001/$ notional) 이 다른 라벨 밤 (+0.0004) 보다 **높지 않다**. −1% 최악 밤도 rich_iv 안에 있었다. regime_follow IR −0.05 < always_short IR 1.63. **라벨은 아직 신호가 아니다.**
+- m=1 콜 매수는 모든 라벨에서 손실 (1달러당 −0.3 ~ −1.0).
+- 어느 경로도 하이라이트 규칙을 통과하지 못했다 (DSR 최대 0.24 BTC always_short · 0.51 SOL).
+- 결과: `results/regime_validation.md`, 대시보드 "라벨 검증" 패널.
+
 ### 실행
 
 ```bash
@@ -64,11 +79,13 @@ PYTHONPATH=src python -m optiq_rwa.data.live snapshot      # 1회 수집 (~90초
 PYTHONPATH=src python -m optiq_rwa.data.live status
 PYTHONPATH=src python -m optiq_rwa.paper.engine trade      # dry-run 주문 (만기 6~26시간 남은 chain)
 PYTHONPATH=src python -m optiq_rwa.paper.engine settle && PYTHONPATH=src python -m optiq_rwa.paper.engine nav
-PYTHONPATH=src python scripts/run_real_backtest.py
+PYTHONPATH=src python scripts/run_real_backtest.py                # TC 3종 · SR/IR/MDD/DSR · 기간별 수익
+PYTHONPATH=src python scripts/run_regime.py && PYTHONPATH=src python scripts/run_regime_validation.py
+PYTHONPATH=src python scripts/run_qubo_bench.py
 PYTHONPATH=src uvicorn optiq_rwa.dashboard.app:app --port 8793   # http://127.0.0.1:8793
 PYTHONPATH=src python scripts/export_dashboard.py                 # docs/index.html
 ./scripts/install_launchd.sh                                      # 자동 수집 · paper 일과 등록
-pytest -q                                                         # 7 tests
+pytest -q                                                         # 17 tests
 ```
 
 ### 한계 (v0.2)
