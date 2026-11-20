@@ -89,11 +89,22 @@ a{color:var(--accent-2)}
     <div><h3 data-t="h_bg"></h3><p data-t="p_bg"></p><p data-t="p_bg2"></p></div>
   </div>
 
+  <h2 data-t="h_regime"></h2>
+  <div class="tiles" id="regime-tiles"></div>
+  <div class="row">
+    <div class="panel"><h3 data-t="h_regime_m"></h3><div id="regime-monthly"></div><p class="cap" data-t="cap_regime_m"></p></div>
+    <div class="panel"><h3 data-t="h_events"></h3><div class="tbl" id="events"></div><p class="cap" data-t="cap_events"></p></div>
+  </div>
+
   <h2 data-t="h_live"></h2>
   <div class="row">
     <div class="panel"><div class="ctl"><label for="sel-base" data-t="l_base"></label><select id="sel-base"></select><span class="small" id="base-info"></span></div>
       <div class="chart" id="ch-index"></div><p class="cap" data-t="cap_index"></p></div>
     <div class="panel"><div class="chart" id="ch-iv"></div><p class="cap" data-t="cap_iv"></p></div>
+  </div>
+  <div class="row">
+    <div class="panel"><h3 data-t="h_candle"></h3><div class="chart" id="ch-candle"></div><p class="cap" data-t="cap_candle"></p></div>
+    <div class="panel"><h3 data-t="h_heat"></h3><div id="heat"></div><p class="cap" data-t="cap_heat"></p></div>
   </div>
   <div class="row">
     <div class="panel"><h3 data-t="h_smile"></h3><div id="smile"></div><p class="cap" data-t="cap_smile"></p></div>
@@ -168,9 +179,16 @@ const T = {
  p_why:["토큰화 국채 (RWA) 는 연 4~5% 이자를 준다. 이 이자만 써서 하루짜리 crypto option (0DTE) 을 사면 원금은 지키고 상승에만 노출된다. 반대로 RWA 를 담보로 option 을 팔면 프리미엄을 받지만 꼬리 위험을 진다. 이 페이지는 어느 시장 상태에서 어느 구조가 돈이 되는지 실데이터로 판별한다.","Tokenised T-bills (RWA) pay 4-5% a year. Spending only that yield on one-day crypto options (0DTE) keeps principal intact with upside exposure. Selling options against the RWA collects premium but takes tail risk. This page tests, on real data, which structure pays in which market state."],
  p_bg:["v0.1 에서 다섯 아이디어를 코드로 만들고 합성 데이터로 sweep 했다. 결론은 수익은 상품 구조가 아니라 가격 (IV 가 비싼가) 에서 나온다는 것이었다.","v0.1 implemented five ideas and swept them on synthetic data. Conclusion: returns come from pricing (is IV rich?) not from product structure."],
  p_bg2:["v0.2 (이 페이지) 는 Deribit 실데이터를 15분마다 SQLite 에 쌓고, 실제 호가로 dry-run 주문을 내고, 과거 체결 데이터로 backtest 한다. 실주문은 보내지 않는다.","v0.2 (this page) stores Deribit data in SQLite every 15 minutes, places dry-run orders on real quotes and backtests on trade history. No live orders are sent."],
+ h_regime:["국면 판별 · 지금 시장은 어느 시나리오인가","Regime · which scenario is the market in now"],
+ h_regime_m:["월별 국면 비중 (실데이터 chain)","Monthly regime share (real chains)"],
+ cap_regime_m:["막대 = 그 달 밤 중 각 라벨 비중. rich_iv (IV 가 실현 변동성보다 비쌈) 만 다른 셋과 또렷이 갈린다. base · fair_iv · events_underpriced 는 특징이 거의 같아 라벨이 약하다.","Bars = share of nights per label in the month. Only rich_iv separates clearly; base, fair_iv and events_underpriced have near-identical features, so those labels are weak."],
+ h_events:["이벤트 캘린더 (다음 60일)","Event calendar (next 60 days)"],
+ cap_events:["FOMC 결정일 · US CPI 발표일 · 토큰 언락. 19:20 UTC 진입이면 FOMC · CPI 수치는 이미 나온 뒤다. tentative · uncertain 은 이슈 색.","FOMC decision days, US CPI releases, token unlocks. At a 19:20 UTC entry the FOMC/CPI print is already out. tentative / uncertain rows are flagged."],
  h_live:["라이브 시장 (snapshot)","Live market (snapshots)"], l_base:["base","base"],
  cap_index:["index price 를 snapshot 마다 찍은 선. 15분 간격.","Index price at each snapshot, 15-minute cadence."],
  cap_iv:["가장 가까운 만기의 ATM mark IV (%). 높을수록 option 이 비싸다.","ATM mark IV (%) of the nearest expiry. Higher = options are richer."],
+ h_candle:["Index 캔들 (1시간)","Index candles (1h)"], cap_candle:["15분 snapshot 의 index price 를 1시간 봉으로 묶은 캔들. 4개 snapshot 이 한 봉이다.","Hourly candles built from 15-minute index snapshots (4 snapshots per candle)."],
+ h_heat:["호가 깊이 히트맵 · spread %","Order-book heatmap · spread %"], cap_heat:["가장 가까운 만기 call 의 strike (세로) × snapshot 시각 (가로). 색 = (ask − bid) / mid. 어두울수록 spread 가 넓다. 비어 있으면 호가 없음. 마우스를 올리면 bid · ask · 수량.","Nearest-expiry calls: strike (rows) × snapshot time (columns). Color = (ask − bid) / mid; darker = wider. Empty = no quote. Hover for bid, ask and size."],
  h_smile:["IV smile (최신 chain)","IV smile (latest chain)"], cap_smile:["가로 m (σ√T 단위 거리), 세로 IV. 점이 비어 있는 곳은 호가가 없는 strike.","x = m (distance in σ√T units), y = IV. Gaps are strikes with no quote."],
  h_universe:["Universe · 거래량 필터","Universe · volume filter"], cap_universe:["Deribit 24h option 거래량 (USD → 억 원). 10억 원 미만은 이슈 색. 미달 base 는 전략에서 빼고 focus base (SOL_USDC) 만 예외로 수집한다.","Deribit 24h option volume (USD → KRW 100M). Below KRW 1bn is flagged. Failing bases are excluded from strategies, except focus bases (SOL_USDC)."],
  h_paper:["Paper book (dry-run)","Paper book (dry-run)"], cap_nav:["전략별 paper NAV (USD). 열린 포지션은 0 으로 평가해 보수적이다.","Paper NAV per strategy (USD). Open positions carried at zero (conservative)."],
@@ -366,6 +384,16 @@ function render(){
   if(st.n_snapshots<96) iss.push(lang==='kr'?`Snapshot ${st.n_snapshots}개: 하루치 (96) 미만. IV · 가격 시계열은 쌓이는 중.`:`${st.n_snapshots} snapshots: under one day (96). IV / price history still accumulating.`);
   if(!navs.length) iss.push(lang==='kr'?'Paper book 비어 있음: 첫 dry-run 주문은 04:20 KST 에 나간다.':'Paper book empty: first dry-run orders at 04:20 KST.');
   document.getElementById('issues').innerHTML=iss.length?`<div class="issue-box"><ul>${iss.map(i=>`<li>${i}</li>`).join('')}</ul></div>`:'';
+  // regime
+  const rg=D.regime||{}; const live=rg.live||[];
+  const act=(a)=>lang==='kr'?({'sell premium (idea 3, with wings)':'프리미엄 매도 (Idea 3, wing 포함)','hold RWA, buy only on events (idea 1 event_only)':'RWA 보유, 이벤트 밤만 매수 (Idea 1)','buy event calls (idea 2)':'이벤트 콜 매수 (Idea 2)'}[a]||a):a;
+  document.getElementById('regime-tiles').innerHTML=live.length?live.map(r=>{ const pk=Object.keys(r).filter(k=>k.startsWith('p_')); const p=r['p_'+r.label]; const bad=r.label==='rich_iv';
+    return `<div class="tile"><div class="k">${r.base}</div><div class="v" style="font-size:18px"><span class="pill ${bad?'warn':'ok'}">${r.label}</span> ${p!=null?(p*100).toFixed(0)+'%':''}</div><div class="d">IV/RV ${fmt(r.ivrv,2)} · payback_mid60 ${fmt(r.pb_mid60,2)} · ${lang==='kr'?'규칙':'rule'}: ${r.rule_label||'–'}</div><div class="d" style="margin-top:4px">→ ${act(r.action)}</div></div>`; }).join('')
+    : `<div class="tile"><div class="k">regime</div><div class="v">–</div><div class="d">${rg.error||(lang==='kr'?'자료 없음':'no data')}</div></div>`;
+  document.getElementById('regime-monthly').innerHTML=svgRegimeMonthly(rg.monthly||[]);
+  const today=new Date().toISOString().slice(0,10); const lim=new Date(Date.now()+60*86400e3).toISOString().slice(0,10);
+  const ev=(D.events||[]).filter(e=>e.date>=today&&e.date<=lim);
+  document.getElementById('events').innerHTML=ev.length?table([{k:'date',h:'date'},{k:'event',h:'event'},{k:'time_utc',h:'UTC'},{k:'confidence',h:'confidence',cls:r=>r.confidence==='confirmed'?'':'issue'},{k:'source',h:'source',f:v=>`<a href="${v}" target="_blank" rel="noopener">${(v||'').replace(/^https?:\/\//,'').slice(0,28)}</a>`}],ev):'<p class="cap">–</p>';
   // base selector
   const sel=document.getElementById('sel-base'); const bases=Object.keys(D.index_history||{}); const cur=sel.value||'SOL_USDC';
   sel.innerHTML=bases.map(b=>`<option ${b===cur?'selected':''}>${b}</option>`).join(''); sel.onchange=drawLive; drawLive();
@@ -428,8 +456,40 @@ function render(){
   document.getElementById('links').innerHTML=links.map(l=>`<li><a href="${l[1]}" target="_blank" rel="noopener">${l[0]}</a></li>`).join('');
   bindTips();
 }
+function svgRegimeMonthly(rows){
+  if(!rows||!rows.length) return '<p class="cap">–</p>';
+  const labels=['rich_iv','base','events_underpriced','fair_iv','unknown']; const cols=palette(); const colOf={rich_iv:cols[4],base:cols[1],events_underpriced:cols[3],fair_iv:cols[0],unknown:cols[5]};
+  const coins=[...new Set(rows.map(r=>r.coin))]; let out='';
+  for(const c of coins){ const rs=rows.filter(r=>r.coin===c); const W=520,H=130,L=40,R=10,Tp=18,B=28; const bw=(W-L-R)/rs.length;
+    let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="regime share ${c}"><text x="${L}" y="12" style="font-weight:600">${c}</text>`;
+    rs.forEach((r,i)=>{ let y=H-B; for(const l of labels){ const v=r[l]||0; if(!v) continue; const hh=v*(H-B-Tp); y-=hh; s+=`<rect x="${L+i*bw+2}" y="${y}" width="${bw-4}" height="${hh}" fill="${colOf[l]}" opacity=".85"><title>${r.month} ${l} ${(v*100).toFixed(0)}% (${r.nights} nights)</title></rect>`; }
+      s+=`<text x="${L+i*bw+bw/2}" y="${H-10}" text-anchor="middle" class="mut" style="font-size:10px">${r.month.slice(2)}</text>`; });
+    out+=s+'</svg>'; }
+  out+=`<div class="legend">${labels.map(l=>`<span><i style="background:${colOf[l]}"></i>${l}</span>`).join('')}</div>`;
+  return out;
+}
+function svgHeat(gd){
+  if(!gd||!gd.cells.length) return `<p class="cap" style="padding:20px">${lang==='kr'?'depth 자료 없음 (universe · focus base 만 수집).':'No depth data (collected for universe and focus bases only).'}</p>`;
+  const nt=gd.times.length, nk=gd.strikes.length; const L=64,Tp=10,R=10,B=40; const cw=Math.max(10,Math.min(28,(520-L-R)/nt)), chh=Math.max(8,Math.min(16,220/nk));
+  const W=L+R+cw*nt, H=Tp+B+chh*nk; const vals=gd.cells.map(c=>c[2]).filter(v=>v!=null); const vmax=Math.max(0.05,Math.min(1, vals.length?Math.max(...vals):1));
+  let s=`<div class="tbl"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,520)}px" role="img" aria-label="spread heatmap">`;
+  for(const c of gd.cells){ const [ti,ki,sp,bid,ask,ba,aa]=c; const x=L+ti*cw, y=Tp+(nk-1-ki)*chh; const o=sp==null?0:Math.min(1,0.15+0.85*sp/vmax);
+    s+=`<rect x="${x}" y="${y}" width="${cw-1}" height="${chh-1}" fill="var(--accent-2)" opacity="${sp==null?0.06:o.toFixed(2)}"><title>K=${gd.strikes[ki]} · ${new Date(gd.times[ti]*1000).toISOString().slice(11,16)} UTC · bid ${bid??'–'} (${ba??'–'}) · ask ${ask??'–'} (${aa??'–'}) · spread ${sp==null?'–':(sp*100).toFixed(1)+'%'}</title></rect>`; }
+  const step=Math.max(1,Math.ceil(nk/8)); gd.strikes.forEach((k,i)=>{ if(i%step===0||i===nk-1) s+=`<text x="${L-6}" y="${Tp+(nk-1-i)*chh+chh/2+4}" text-anchor="end" class="mut" style="font-size:10px">${k}</text>`; });
+  const tstep=Math.max(1,Math.ceil(nt/6)); gd.times.forEach((t,i)=>{ if(i%tstep===0||i===nt-1) s+=`<text x="${L+i*cw+cw/2}" y="${H-24}" text-anchor="middle" class="mut" style="font-size:10px">${new Date(t*1000).toISOString().slice(11,16)}</text>`; });
+  s+=`<text x="${W/2}" y="${H-6}" text-anchor="middle" class="mut">${gd.kind} · expiry ${gd.expiry} · ${lang==='kr'?'진함 = 넓은 spread (최대':'dark = wide spread (max'} ${(vmax*100).toFixed(0)}%)</text></svg></div>`;
+  return s;
+}
+function drawCandles(b){
+  const data=(D.candles||{})[b]||[]; const el=document.getElementById('ch-candle');
+  if(data.length<2){ el.innerHTML=`<p class="cap" style="padding:20px">${lang==='kr'?'캔들은 snapshot 이 2시간 이상 쌓이면 표시.':'Candles appear after 2+ hours of snapshots.'}</p>`; return; }
+  const c=mkChart('ch-candle'); const css=getComputedStyle(document.documentElement);
+  const s=c.addCandlestickSeries({upColor:css.getPropertyValue('--ok').trim(),downColor:css.getPropertyValue('--bad').trim(),borderVisible:false,wickUpColor:css.getPropertyValue('--ok').trim(),wickDownColor:css.getPropertyValue('--bad').trim(),priceFormat:{type:'price',precision:b.startsWith('BTC')?0:2,minMove:0.01}});
+  s.setData(data); c.timeScale().fitContent();
+}
 function drawLive(){
   const b=document.getElementById('sel-base').value||'SOL_USDC';
+  drawCandles(b); document.getElementById('heat').innerHTML=svgHeat((D.spread_grid||{})[b]);
   const ih=D.index_history[b]||[]; const iv=(D.iv_history||{})[b]||[];
   lines('ch-index',{[b+' index']:ih},null,{type:'price',precision:b.startsWith('BTC')?0:2,minMove:0.01});
   lines('ch-iv',{[b+' ATM IV %']:iv},null,{type:'price',precision:1,minMove:0.1});

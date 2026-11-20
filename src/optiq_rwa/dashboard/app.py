@@ -68,6 +68,59 @@ def atm_iv_history(con) -> dict:
     return out
 
 
+def candles(con, minutes: int = 60) -> dict:
+    """OHLC per base from index_price snapshots, bucketed to `minutes` (15-min snapshots -> hourly candles)."""
+    df = store.read(con, "SELECT s.ts_ms, i.index_name, i.price FROM index_price i JOIN snapshots s USING (snap_id) ORDER BY s.ts_ms")
+    out = {}
+    if df.empty:
+        return out
+    df["bucket"] = (df.ts_ms // (minutes * 60_000)) * (minutes * 60)
+    for idx, g in df.groupby("index_name"):
+        b = idx[:-4].upper() if idx.endswith("_usd") else idx.upper()
+        o = g.groupby("bucket").price.agg(["first", "max", "min", "last"])
+        out[b] = [{"time": int(t), "open": float(r["first"]), "high": float(r["max"]), "low": float(r["min"]), "close": float(r["last"])} for t, r in o.iterrows()]
+    return out
+
+
+def spread_grid(con, bases, max_snaps: int = 48) -> dict:
+    """Strike x snapshot grid of top-of-book relative spread for the nearest expiry (depth collected bases only)."""
+    snaps = store.read(con, "SELECT snap_id, ts_ms FROM snapshots ORDER BY snap_id DESC LIMIT ?", (max_snaps,)).sort_values("snap_id")
+    if snaps.empty:
+        return {}
+    ph = ",".join("?" * len(snaps))
+    q = f"""SELECT o.snap_id, i.base, i.strike, i.option_type AS kind, i.expiration_ts, o.bid_px, o.ask_px, o.bid_amt, o.ask_amt, i.inverse,
+                   st.underlying_price
+            FROM order_book o JOIN instruments i USING (instrument_name)
+            LEFT JOIN inst_state st ON st.instrument_name=o.instrument_name AND st.snap_id=o.snap_id
+            WHERE o.level=0 AND o.snap_id IN ({ph})"""
+    df = store.read(con, q, snaps.snap_id.tolist())
+    out = {}
+    tmap = dict(zip(snaps.snap_id, snaps.ts_ms // 1000))
+    for b, g in df.groupby("base"):
+        if bases and b not in bases:
+            continue
+        last_ts = snaps.ts_ms.iloc[-1]
+        g = g[g.expiration_ts > last_ts]
+        if g.empty:
+            continue
+        exp = g.expiration_ts.min()
+        g = g[(g.expiration_ts == exp) & (g.kind == "call")].copy()
+        conv = np.where(g.inverse == 1, g.underlying_price.fillna(1.0), 1.0)
+        g["bid"] = g.bid_px * conv; g["ask"] = g.ask_px * conv
+        g["mid"] = (g.bid + g.ask) / 2
+        g["spread_pct"] = np.where(g.mid > 0, (g.ask - g.bid) / g.mid, np.nan)
+        times = sorted(set(tmap[s] for s in g.snap_id))
+        strikes = sorted(g.strike.unique())
+        ti = {t: i for i, t in enumerate(times)}; ki = {k: i for i, k in enumerate(strikes)}
+        cells = [[ti[tmap[r.snap_id]], ki[r.strike], None if pd.isna(r.spread_pct) else round(float(r.spread_pct), 4),
+                  None if pd.isna(r.bid) else float(r.bid), None if pd.isna(r.ask) else float(r.ask),
+                  None if pd.isna(r.bid_amt) else float(r.bid_amt), None if pd.isna(r.ask_amt) else float(r.ask_amt)]
+                 for r in g.itertuples()]
+        out[b] = {"times": [int(t) for t in times], "strikes": [float(k) for k in strikes], "kind": "call",
+                  "expiry": dt.datetime.fromtimestamp(exp / 1000, dt.timezone.utc).strftime("%d%b%y").upper(), "cells": cells}
+    return out
+
+
 def latest_chains(con) -> dict:
     snap = store.latest_snap_id(con)
     if snap is None:
@@ -87,6 +140,24 @@ def latest_chains(con) -> dict:
 
 def read_csv(p: pathlib.Path) -> pd.DataFrame:
     return pd.read_csv(p) if p.exists() else pd.DataFrame()
+
+
+def regime_block(con) -> dict:
+    """Latest regime per base (risk.regime.classify_live) + monthly label share from results/regime_history.csv."""
+    out = {"live": [], "monthly": []}
+    try:
+        from ..risk.regime import classify_live
+        live = classify_live(con)
+        out["live"] = _records(live.round(3))
+    except Exception as e:          # short live history / missing raw chains must not break the page
+        out["error"] = str(e)[:200]
+    hist = read_csv(RESULTS / "regime_history.csv")
+    if not hist.empty and {"coin", "date", "label"} <= set(hist.columns):
+        hist["month"] = pd.to_datetime(hist.date).dt.strftime("%Y-%m")
+        share = hist.groupby(["coin", "month"]).label.value_counts(normalize=True).unstack(fill_value=0).reset_index()
+        share["nights"] = hist.groupby(["coin", "month"]).size().values
+        out["monthly"] = _records(share.round(2))
+    return out
 
 
 def build_bundle(con=None) -> dict:
@@ -134,10 +205,14 @@ def build_bundle(con=None) -> dict:
         "universe": _records(uni.round(2)),
         "volume_history": _records(vol_hist.round(0)),
         "index_history": index_history(con),
+        "candles": candles(con),
+        "spread_grid": spread_grid(con, set(uni[uni.universe_pass == 1].base) | set(SETTINGS.focus_bases)),
         "iv_history": atm_iv_history(con),
         "chains": latest_chains(con),
         "paper": paper, "periods": periods, "sweep": sweep_rows, "perp": _records(perp.round(4)) if not perp.empty else [],
         "real": real,
+        "regime": regime_block(con),
+        "events": _records(read_csv(ROOT / "data" / "events.csv")),
     }
 
 

@@ -48,6 +48,14 @@
 
 해석: 참고 사례 (SOL, ask 기준 0.65) 와 같은 결과다. 지난 6개월 BTC · SOL 데일리 콜은 ask 로 사면 1달러당 0.6~0.7 달러를 돌려줬다. 매수는 IV 가 싼 밤을 골라야 하고, 매도는 꼬리 (wing) 비용을 낸 뒤에도 남는지 더 긴 표본이 필요하다.
 
+### 국면 판별 (regime) · 이벤트 캘린더 (2026-11-20 추가)
+
+- `src/optiq_rwa/risk/regime.py`: walk-forward 특징 (IV/RV · 최근 20/60밤 payback · P(ITM) 격차 · IV 백분위) → 합성 4 시나리오 중심점에 nearest-centroid. 결과 `results/regime_summary.md`, `results/regime_history.csv`. `scripts/run_regime.py`.
+- 현재 라벨: BTC · SOL · ETH 모두 **rich_iv** (IV 가 실현 변동성보다 비쌈) → action "프리미엄 매도 (Idea 3, wing 포함)". BTC 는 5~7월 rich_iv, 8~9월 fair_iv, 11월 다시 rich_iv.
+- 한계: rich_iv 만 다른 셋과 또렷이 갈린다. base · fair_iv · events_underpriced 는 특징이 거의 같다. 실데이터 chain 이 얇아 (BTC 7 · SOL 2.6 호가/밤) 라벨은 신호가 아니라 기울기로 읽는다.
+- `data/events.csv` + `src/optiq_rwa/data/events.py`: FOMC 2026 (8회, 확정) · 2027 (8회, tentative) · US CPI 2026~27-02 (BLS) · HYPE 언락 (uncertain). 19:20 UTC 진입이면 FOMC · CPI 수치는 이미 나온 뒤라 "event night" 은 사후 움직임이다.
+- 실데이터 재실행: BTC event night 7밤의 m=1 콜은 전부 0 으로 끝났다 (payback 0). event_only 매수도 RWA 에 못 미쳤다 (−0.8%p). 합성 sweep 의 "이벤트 과소평가" 가정은 지난 6개월 BTC 에서는 성립하지 않았다 (n=7, 참고만).
+
 ### 실행
 
 ```bash

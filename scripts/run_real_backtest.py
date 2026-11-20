@@ -17,6 +17,7 @@ from optiq_rwa.backtest.metrics import nav_metrics          # noqa: E402
 from optiq_rwa.backtest.periods import period_table, nights_to_dates  # noqa: E402
 from optiq_rwa.risk.calibration import calibration_table    # noqa: E402
 from optiq_rwa.strategies import core                        # noqa: E402
+from optiq_rwa.data.events import event_dates                # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--raw", default="data/raw")
@@ -31,6 +32,8 @@ M_GRID = (-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5)
 def regularise(raw: pd.DataFrame, tol: float) -> pd.DataFrame:
     """One row per (night, coin, kind, m in M_GRID): nearest traded strike within tol, else NaN row."""
     raw = raw[np.isfinite(raw.m) & (raw.iv > 0)].copy()
+    ev = event_dates(("FOMC", "CPI"))
+    raw["event"] = pd.to_datetime(raw.date).dt.date.isin(ev)
     raw["m_cont"] = np.log(raw.k_rel) / (raw.iv_atm * np.sqrt(12.7 / 8760))
     rows = []
     for (n, c, kd), g in raw.groupby(["night", "coin", "kind"]):
@@ -45,7 +48,7 @@ def regularise(raw: pd.DataFrame, tol: float) -> pd.DataFrame:
 
 summary = ["# Real-data backtest (Deribit trade VWAP chains)\n",
            "Quotes = VWAP of trades within +/-20 min of 19:20 UTC, bid/ask rebuilt with the synthetic spread model (10% + 2bp). "
-           "Indicative only. Event flag is all-False (no event calendar yet), so event-conditional modes are not run.\n"]
+           "Indicative only. Event nights = entry on a FOMC decision day or US CPI day (data/events.csv; the print is already out at the 19:20 UTC entry, so the night carries the post-event move).\n"]
 nav_all = []
 for f in sorted(pathlib.Path(a.raw).glob("*_chain.parquet")):
     raw = pd.read_parquet(f)
@@ -55,11 +58,15 @@ for f in sorted(pathlib.Path(a.raw).glob("*_chain.parquet")):
         continue
     nights = sorted(ch.night.unique())
     cover = ch.groupby("m").night.nunique().reindex(M_GRID).fillna(0).astype(int)
-    summary.append(f"\n## {coin}: {len(nights)} nights ({raw.date.min()} .. {raw.date.max()}), {len(raw)} traded strikes\n")
+    n_ev = int(ch.groupby("night").event.first().sum())
+    summary.append(f"\n## {coin}: {len(nights)} nights ({raw.date.min()} .. {raw.date.max()}), {len(raw)} traded strikes, {n_ev} event nights\n")
     summary.append("Nights with a strike within tol of each m bucket:\n\n" + cover.to_frame("nights").T.to_markdown())
     # idea 4 calibration on all nights
     cal = calibration_table(ch)
     cal.to_csv(out / f"calibration_{coin}.csv", index=False)
+    evc = cal[(cal.kind == "call") & (cal.m == 1.0)]
+    if len(evc):
+        summary.append("\nEvent vs non-event nights, calls m=1 (payback_ask):\n\n" + evc[["event", "n", "p_itm_model", "p_itm_emp", "payback_mid", "payback_ask"]].round(3).to_markdown(index=False))
     summary.append("\n### Idea 4 - calibration (calls)\n")
     summary.append(cal[cal.kind == "call"][["m", "n", "p_itm_model", "p_itm_emp", "p_be_model", "p_be_emp", "payback_mid", "payback_ask"]].round(3).to_markdown(index=False))
     # strategies need a dense (night x coin) grid for the chosen m -> drop nights missing that bucket
@@ -71,12 +78,12 @@ for f in sorted(pathlib.Path(a.raw).glob("*_chain.parquet")):
         if sub.night.nunique() < 20:
             continue
         chain_m = ch[ch.night.isin(sub.night)]
-        for bm in (1.0, 3.0):
-            nav, info = core.yield_funded_calls(chain_m, test_start, m=m, mode="daily", budget_mult=bm, coins=[coin])
+        for mode, bm in (("daily", 1.0), ("daily", 3.0), ("event_only", 3.0), ("bank_event", 1.0)):
+            nav, info = core.yield_funded_calls(chain_m, test_start, m=m, mode=mode, budget_mult=bm, coins=[coin])
             if nav.dropna().empty:
                 continue
-            rows.append(dict(coin=coin, idea="1_yield_funded_calls", params=f"m={m} daily bm={bm}", nights=len(nav.dropna()), **nav_metrics(nav), **info))
-            nav_all.append(nights_to_dates(nav.dropna(), dates).rename(f"{coin} calls m={m} bm={bm}"))
+            rows.append(dict(coin=coin, idea="1_yield_funded_calls", params=f"m={m} {mode} bm={bm}", nights=len(nav.dropna()), **nav_metrics(nav), **info))
+            nav_all.append(nights_to_dates(nav.dropna(), dates).rename(f"{coin} calls m={m} {mode} bm={bm}"))
     for m, wing in ((1.5, 2.5), (1.5, None), (2.0, None)):
         need = [("call", m), ("put", -m)] + ([("call", wing), ("put", -wing)] if wing else [])
         ok = None
@@ -86,12 +93,12 @@ for f in sorted(pathlib.Path(a.raw).glob("*_chain.parquet")):
         if len(ok) < 20:
             continue
         chain_m = ch[ch.night.isin(ok)]
-        for frac in (0.25, 0.5):
-            nav, info = core.short_premium(chain_m, test_start, m=m, frac=frac, skip_events=False, wing_m=wing)
+        for frac, skip in ((0.25, False), (0.5, False), (0.5, True)):
+            nav, info = core.short_premium(chain_m, test_start, m=m, frac=frac, skip_events=skip, wing_m=wing)
             if nav.dropna().empty:
                 continue
-            rows.append(dict(coin=coin, idea="3_short_premium", params=f"m={m} wing={wing} frac={frac}", nights=len(nav.dropna()), **nav_metrics(nav), **info))
-            nav_all.append(nights_to_dates(nav.dropna(), dates).rename(f"{coin} short m={m} wing={wing} frac={frac}"))
+            rows.append(dict(coin=coin, idea="3_short_premium", params=f"m={m} wing={wing} frac={frac} skip_ev={skip}", nights=len(nav.dropna()), **nav_metrics(nav), **info))
+            nav_all.append(nights_to_dates(nav.dropna(), dates).rename(f"{coin} short m={m} wing={wing} frac={frac} skip_ev={skip}"))
     res = pd.DataFrame(rows)
     if not res.empty:
         res.to_csv(out / f"strategies_{coin}.csv", index=False)
