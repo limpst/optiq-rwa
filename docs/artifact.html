@@ -361,7 +361,7 @@ function buildGlance(){
   const nReal=rt.filter(isHl).length, nSw=st.filter(r=>r.highlight===true||r.highlight==='True'||isHl(r)).length;
   const live=(D.regime||{}).live||[]; const rich=live.filter(r=>r.label==='rich_iv').length;
   const fee=rt.length?rt.reduce((a,r)=>a+(r.fee_per_premium||0),0)/rt.length:null;
-  const st_=D.status||{}; const today=new Date().toISOString().slice(0,10); const ev=(D.events||[]).filter(e=>e.date>=today).sort((a,b)=>a.date<b.date?-1:1)[0];
+  const st_=D.status||{}; const today=new Date().toISOString().slice(0,10); const evAll=(D.events||[]).filter(e=>e.date>=today).sort((a,b)=>a.date<b.date?-1:1); const ev=evAll.find(e=>e.confidence==='confirmed')||evAll[0]; const evU=evAll.find(e=>e.confidence!=='confirmed'&&e.date<(ev?ev.date:'9999'));
   const kr=lang==='kr';
   const cards=[
     [kr?'통과 전략 (실데이터 BTC)':'Passing strategies (real BTC)', `${nReal} / ${rt.length}`, kr?'SR>0 · IR>0.5 · MDD≥−15% · DSR≥0.95 · 60밤':'SR>0, IR>0.5, MDD≥−15%, DSR≥0.95, 60 nights', nReal===0],
@@ -369,7 +369,7 @@ function buildGlance(){
     [kr?'지금 국면':'Regime now', live.length?`rich_iv ${rich}/${live.length}`:'–', kr?'IV 가 실현 변동성보다 비쌈 → 매도 쪽':'IV above realised → sell side', false],
     [kr?'수수료 (프리미엄 1달러당)':'Fee per $1 premium', fee!=null?fmt(fee,3)+' $':'–', kr?'12.5% 상한이 걸림 (0DTE 는 싸서)':'12.5% cap binds (cheap 0DTE)', fee!=null&&fee>0.05],
     [kr?'라이브 snapshot':'Live snapshots', String(st_.n_snapshots||0), (st_.first_date||'')+' → '+((st_.last_snapshot||{}).date||''), (st_.n_snapshots||0)<96],
-    [kr?'다음 이벤트':'Next event', ev?ev.event:'–', ev?`${ev.date} ${ev.time_utc} UTC (${ev.confidence})`:'', ev&&ev.confidence!=='confirmed'],
+    [kr?'다음 확정 이벤트':'Next confirmed event', ev?ev.event:'–', ev?`${ev.date} ${ev.time_utc} UTC${evU?` · (${kr?'미확정':'unconfirmed'}: ${evU.event} ${evU.date})`:''}`:'', false],
   ];
   document.getElementById('gcards').innerHTML=cards.map(c=>`<div class="gcard"><div class="k">${c[0]}</div><div class="v ${c[3]?'issue':''}" style="${c[3]?'padding:0 6px;border-radius:6px':''}">${c[1]}</div><div class="d">${c[2]}</div></div>`).join('');
   // conclusions computed from data (real calibration, real curves, regime validation) so they stay true as data changes
