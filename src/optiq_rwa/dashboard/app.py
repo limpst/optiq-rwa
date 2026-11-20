@@ -156,6 +156,16 @@ def curves_block() -> dict:
         for c in ns.columns:
             s_ = ns[c].dropna()
             out["real"][c] = [{"time": int(t.timestamp()), "value": float(v)} for t, v in s_.items()]
+    # monthly / weekly period tables for every real curve under base TC (for the period-returns panel)
+    out["real_periods"] = {}
+    if nv.exists():
+        for c in ns.columns:
+            if "|base|" not in c:
+                continue
+            s_ = ns[c].dropna()
+            if len(s_) < 5:
+                continue
+            out["real_periods"][c] = {f: _records(period_table(s_, f, SETTINGS.rwa_rate).round(6)) for f in ("W", "M")}
     sc = RESULTS / "sweep_curves.csv"
     if sc.exists():
         cs = pd.read_csv(sc, index_col=0)
