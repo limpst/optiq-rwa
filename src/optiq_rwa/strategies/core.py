@@ -24,6 +24,8 @@ def _lookup(chain, kind, m, costs=False):
     buyers pay ask + fee and receive payoff - settlement fee; sellers receive bid - fee and owe payoff + fee.
     """
     sub = chain[(chain.kind == kind) & (chain.m == m)]
+    if sub.empty:
+        raise ValueError(f"no {kind} strikes at m={m} in this chain (available m: {sorted(chain.m.unique())[:12]}...)")
     src = {"ask": "ask", "bid": "bid", "mid": "mid", "payoff": "payoff", "payoff_short": "payoff"}
     if costs:
         if "ask_c" not in sub.columns:
