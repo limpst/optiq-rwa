@@ -14,24 +14,36 @@ from ..optimize.qubo import build_qubo, polish, solve_greedy, solve_milp, solve_
 from ..risk.calibration import edge_model
 
 
-def _lookup(chain, kind, m):
-    """[night, coin] tables of ask, bid, payoff, event for one strike bucket."""
+COST_COLS = {"ask": "ask_c", "bid": "bid_c", "payoff": "payoff_long_c", "payoff_short": "payoff_short_c"}
+
+
+def _lookup(chain, kind, m, costs=False):
+    """[night, coin] tables of ask, bid, payoff (long), payoff_short, event for one strike bucket.
+
+    costs=True uses the transaction-cost columns from backtest.costs.with_costs (ask_c, bid_c, payoff_*_c):
+    buyers pay ask + fee and receive payoff - settlement fee; sellers receive bid - fee and owe payoff + fee.
+    """
     sub = chain[(chain.kind == kind) & (chain.m == m)]
-    piv = {f: sub.pivot(index="night", columns="coin", values=f) for f in ("ask", "bid", "mid", "payoff")}
+    src = {"ask": "ask", "bid": "bid", "mid": "mid", "payoff": "payoff", "payoff_short": "payoff"}
+    if costs:
+        if "ask_c" not in sub.columns:
+            raise ValueError("costs=True needs backtest.costs.with_costs(chain) columns")
+        src.update(COST_COLS)
+    piv = {f: sub.pivot(index="night", columns="coin", values=c) for f, c in src.items()}
     ev = sub.groupby("night").event.first()
     return piv, ev
 
 
 # ---------------------------------------------------------------- idea 1
 def yield_funded_calls(chain, test_start, rwa_rate=0.045, m=1.0, mode="daily",
-                       budget_mult=1.0, coins=None):
+                       budget_mult=1.0, coins=None, costs=False):
     """Spend (a multiple of) the RWA yield on daily calls.
 
     mode: 'daily'      spend each night's accrual
           'event_only' spend accrual only on event nights (else keep it)
           'bank_event' bank accruals and spend the whole bank on event nights
     """
-    piv, ev = _lookup(chain, "call", m)
+    piv, ev = _lookup(chain, "call", m, costs)
     coins = coins or list(piv["ask"].columns)
     nights = [n for n in piv["ask"].index if n >= test_start]
     nav, bank, out, spent, paid = 1.0, 0.0, [], 0.0, 0.0
@@ -77,9 +89,12 @@ def repair_selection(x, e, v, lam, k_units, night, coin):
 
 def qubo_event_selector(chain, test_start, rwa_rate=0.045, budget_mult=1.0, lam=0.5,
                         solver="sa", m_set=(0.0, 0.5, 1.0, 1.5), week=7, refit_every=28,
-                        units_per_week=7, prior_n=60, seed=0, rho=0.7):
+                        units_per_week=7, prior_n=60, seed=0, rho=0.7, costs=False):
     calls = chain[(chain.kind == "call") & (chain.m.isin(m_set))].copy()
-    calls["pb"] = calls.payoff / calls.ask
+    if costs:
+        calls["pb"] = calls.payoff_long_c / calls.ask_c
+    else:
+        calls["pb"] = calls.payoff / calls.ask
     nights_all = sorted(calls.night.unique())
     test_nights = [n for n in nights_all if n >= test_start]
     nav, out, spent, paid, edges, var_tab, last_fit = 1.0, {}, 0.0, 0.0, None, None, -10**9
@@ -126,7 +141,7 @@ def qubo_event_selector(chain, test_start, rwa_rate=0.045, budget_mult=1.0, lam=
 
 # ---------------------------------------------------------------- idea 3
 def short_premium(chain, test_start, rwa_rate=0.045, m=1.5, frac=1.0, skip_events=True,
-                  structure="strangle", wing_m=None):
+                  structure="strangle", wing_m=None, costs=False):
     """Sell daily options at the bid against RWA collateral.
 
     frac   : spot notional sold per $ NAV per leg (1.0 = fully covered for calls).
@@ -137,9 +152,9 @@ def short_premium(chain, test_start, rwa_rate=0.045, m=1.5, frac=1.0, skip_event
     long_legs = []
     if wing_m is not None:
         long_legs = [("call", wing_m)] + ([("put", -wing_m)] if structure == "strangle" else [])
-    shorts = [_lookup(chain, k, mm)[0] for k, mm in short_legs]
-    longs = [_lookup(chain, k, mm)[0] for k, mm in long_legs]
-    ev = _lookup(chain, *short_legs[0])[1]
+    shorts = [_lookup(chain, k, mm, costs)[0] for k, mm in short_legs]
+    longs = [_lookup(chain, k, mm, costs)[0] for k, mm in long_legs]
+    ev = _lookup(chain, *short_legs[0], costs)[1]
     coins = list(shorts[0]["bid"].columns)
     nights = [n for n in shorts[0]["bid"].index if n >= test_start]
     w = frac / len(coins)
@@ -150,7 +165,7 @@ def short_premium(chain, test_start, rwa_rate=0.045, m=1.5, frac=1.0, skip_event
             pnl = 0.0
             for c in coins:
                 for piv in shorts:
-                    pnl += w * (piv["bid"].at[n, c] - piv["payoff"].at[n, c])
+                    pnl += w * (piv["bid"].at[n, c] - piv["payoff_short"].at[n, c])
                     prem += w * piv["bid"].at[n, c] * nav
                 for piv in longs:
                     pnl += w * (piv["payoff"].at[n, c] - piv["ask"].at[n, c])

@@ -2,7 +2,8 @@
 
 This module imports nothing from any private/authenticated endpoint. Fills are
 simulated against the latest snapshot in SQLite: buys fill at the best ask,
-sells at the best bid (level 0 of order_book, else book_summary). Positions
+sells at the best bid, walking order_book levels until the USD target is filled (VWAP; level 0 of book_summary
+quote if no depth). Deribit trading fee is charged on every fill, settlement fee on ITM settlement (CostModel). Positions
 settle at Deribit's delivery price for the expiry date (08:00 UTC).
 
 Strategies (same ideas as strategies.core, applied to one live chain):
@@ -25,6 +26,7 @@ import time
 import numpy as np
 import pandas as pd
 
+from ..backtest.costs import BASE as COST_MODEL
 from ..config import SETTINGS
 from ..data import store
 from ..data.live import index_name_of, live_chain
@@ -119,22 +121,66 @@ def _is_event_day(date) -> bool:
         return False
 
 
+def _walk_book(con, snap_id, row, side, usd_target, cs=None, min_amt=None) -> dict:
+    """Depth walk (no writes). Buys consume ask levels, sells bid levels, ascending level, until usd_target is filled.
+
+    Returns dict(px0, vwap, qty, fill_usd, levels_used, slippage_usd, fee_usd, partial). Inverse quotes are converted to
+    USD with spot (as live_chain does). Without order_book rows the level-0 quote from `row` is used with unlimited depth."""
+    if cs is None:
+        cs, _, min_amt = _contract_size(con, row.instrument_name)
+    _, inverse, _ = _contract_size(con, row.instrument_name)
+    spot = float(row.spot)
+    px0 = float(row.ask if side == "buy" else row.bid)
+    out = dict(px0=px0, vwap=np.nan, qty=0.0, fill_usd=0.0, levels_used=0, slippage_usd=0.0, fee_usd=0.0, partial=False)
+    if not np.isfinite(px0) or px0 <= 0 or usd_target <= 0:
+        return out
+    pc, ac = ("ask_px", "ask_amt") if side == "buy" else ("bid_px", "bid_amt")
+    lv = con.execute(f"SELECT {pc},{ac} FROM order_book WHERE snap_id=? AND instrument_name=? AND {pc} IS NOT NULL AND {ac}>0 ORDER BY level",
+                     (snap_id, row.instrument_name)).fetchall()
+    levels = [(p * spot if inverse else p, a) for p, a in lv if p and p > 0]
+    if not levels:
+        levels = [(px0, np.inf)]
+    remaining, qty, usd, used = float(usd_target), 0.0, 0.0, 0
+    for px, amt in levels:
+        take = min(remaining, amt * px * cs)
+        if take <= 1e-12:
+            break
+        qty += take / (px * cs)
+        usd += take
+        remaining -= take
+        used += 1
+        if remaining <= 1e-9 * max(usd_target, 1.0):
+            remaining = 0.0
+            break
+    if qty <= 0:
+        return out
+    vwap = usd / (qty * cs)
+    out.update(vwap=vwap, qty=qty, fill_usd=usd, levels_used=used, partial=remaining > 0,
+               slippage_usd=((vwap - px0) if side == "buy" else (px0 - vwap)) * qty * cs,
+               fee_usd=min(COST_MODEL.fee_rel * spot * qty * cs, COST_MODEL.fee_cap * usd))
+    return out
+
+
 def _place(con, snap_id, ts, date, strategy, row, side, usd_target, note=""):
-    """Simulate one order: qty from USD target, fill at ask (buy) / bid (sell). Returns fill USD (signed cash)."""
+    """Simulate one order: qty from USD target, walking book depth (VWAP fill). Returns signed cash (fill USD, fee excluded; fee is in paper_orders)."""
     cs, inverse, min_amt = _contract_size(con, row.instrument_name)
-    px = float(row.ask if side == "buy" else row.bid)           # already USD per unit (live_chain converts inverse)
-    if not np.isfinite(px) or px <= 0:
+    w = _walk_book(con, snap_id, row, side, usd_target, cs, min_amt)
+    if w["qty"] <= 0:
         con.execute("INSERT INTO paper_orders (ts_ms,date,strategy,instrument_name,side,qty,status,spot,snap_id,note) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (ts, date, strategy, row.instrument_name, side, 0.0, "rejected", float(row.spot), snap_id, "no quote"))
         return 0.0
-    qty = usd_target / (px * cs)
-    flag = "" if qty >= min_amt else f"below_min_trade_amount({min_amt})"
-    fill_usd = qty * px * cs
-    con.execute("INSERT INTO paper_orders (ts_ms,date,strategy,instrument_name,side,qty,limit_px,status,fill_px,fill_usd,fill_ts_ms,spot,snap_id,note) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (ts, date, strategy, row.instrument_name, side, qty, px, "filled", px, fill_usd, ts, float(row.spot), snap_id, (note + " " + flag).strip()))
+    qty, fill_usd, vwap = w["qty"], w["fill_usd"], w["vwap"]
+    flags = []
+    if w["partial"]:
+        flags.append("partial: depth exhausted")
+    if qty < min_amt:
+        flags.append(f"below_min_trade_amount({min_amt})")
+    con.execute("INSERT INTO paper_orders (ts_ms,date,strategy,instrument_name,side,qty,limit_px,status,fill_px,fill_usd,fill_ts_ms,spot,snap_id,note,fee_usd,slippage_usd,levels_used) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (ts, date, strategy, row.instrument_name, side, qty, w["px0"], "filled", vwap, fill_usd, ts, float(row.spot), snap_id,
+                 " ".join([note] + flags).strip(), w["fee_usd"], w["slippage_usd"], w["levels_used"]))
     con.execute("INSERT INTO paper_positions (strategy,instrument_name,side,qty,entry_px,entry_usd,entry_ts_ms,expiry_ts,spot_entry) VALUES (?,?,?,?,?,?,?,?,?)",
-                (strategy, row.instrument_name, side, qty, px, fill_usd, ts, int(row.expiration_ts), float(row.spot)))
+                (strategy, row.instrument_name, side, qty, vwap, fill_usd, ts, int(row.expiration_ts), float(row.spot)))
     return -fill_usd if side == "buy" else fill_usd
 
 
@@ -206,9 +252,12 @@ def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.Dat
             r = o["row"]
             cs, _, min_amt = _contract_size(con, r.instrument_name)
             px = float(r.ask if o["side"] == "buy" else r.bid)
+            w = _walk_book(con, snap_id, r, o["side"], o["usd"], cs, min_amt)
             rows.append(dict(strategy=name, base=o["base"], instrument_name=r.instrument_name, side=o["side"], m=round(float(r.m), 2),
                              px_usd=px, qty=o["usd"] / (px * cs) if px > 0 else np.nan, usd=o["usd"], hours=round(float(r.hours), 1),
-                             spot=float(r.spot), quote_source=r.quote_source, min_trade_amount=min_amt, regime_mode=_regime_mode(con, date) if name == "regime_switch" else ""))
+                             spot=float(r.spot), quote_source=r.quote_source, min_trade_amount=min_amt,
+                             fee_usd=w["fee_usd"], slippage_usd=w["slippage_usd"], levels_used=w["levels_used"], fill_vwap=w["vwap"],
+                             regime_mode=_regime_mode(con, date) if name == "regime_switch" else ""))
     return pd.DataFrame(rows)
 
 
@@ -226,8 +275,9 @@ def settle(con=None, log=print) -> int:
         s = px[0]
         intrinsic = max(s - r.strike, 0.0) if r.option_type == "call" else max(r.strike - s, 0.0)
         payoff = intrinsic * r.qty * (r.contract_size or 1.0)
-        pnl = payoff - r.entry_usd if r.side == "buy" else r.entry_usd - payoff
-        con.execute("UPDATE paper_positions SET settled=1, settle_px=?, payoff_usd=?, pnl_usd=? WHERE pos_id=?", (s, payoff, pnl, int(r.pos_id)))
+        sfee = float(COST_MODEL.settle_fee(payoff / (s * r.qty * (r.contract_size or 1.0)) if payoff > 0 and s > 0 else 0.0)) * s * r.qty * (r.contract_size or 1.0)
+        pnl = (payoff - r.entry_usd if r.side == "buy" else r.entry_usd - payoff) - sfee
+        con.execute("UPDATE paper_positions SET settled=1, settle_px=?, payoff_usd=?, pnl_usd=?, settle_fee_usd=? WHERE pos_id=?", (s, payoff, pnl, sfee, int(r.pos_id)))
         n += 1
     con.commit()
     log(f"settled {n} positions")
@@ -235,7 +285,8 @@ def settle(con=None, log=print) -> int:
 
 
 def mark_nav(con=None, nav0=1_000_000.0, date=None, log=print) -> pd.DataFrame:
-    """Daily NAV per strategy = nav0 + RWA accrual - premium paid + premium received + settled payoffs.
+    """Daily NAV per strategy = nav0 + RWA accrual - premium paid + premium received + settled payoffs - fees
+    (fees = trading fees on every fill + settlement fees; slippage is already inside the VWAP fill price).
 
     Open positions are carried at zero (premium already spent / received), so NAV is conservative for
     long options until settlement and optimistic for short options until settlement."""
@@ -252,12 +303,16 @@ def mark_nav(con=None, nav0=1_000_000.0, date=None, log=print) -> pd.DataFrame:
                              (name, int(pd.Timestamp(date, tz="UTC").timestamp() * 1000) + 86_400_000)).fetchone()[0]
         paid = con.execute("SELECT COALESCE(SUM(fill_usd),0) FROM paper_orders WHERE strategy=? AND side='buy' AND status='filled' AND date<=?", (name, date)).fetchone()[0]
         recv = con.execute("SELECT COALESCE(SUM(fill_usd),0) FROM paper_orders WHERE strategy=? AND side='sell' AND status='filled' AND date<=?", (name, date)).fetchone()[0]
+        trade_fees = con.execute("SELECT COALESCE(SUM(fee_usd),0) FROM paper_orders WHERE strategy=? AND status='filled' AND date<=?", (name, date)).fetchone()[0]
+        settle_fees = con.execute("SELECT COALESCE(SUM(settle_fee_usd),0) FROM paper_positions WHERE strategy=? AND settled=1 AND expiry_ts<=?",
+                                  (name, int(pd.Timestamp(date, tz="UTC").timestamp() * 1000) + 86_400_000)).fetchone()[0]
+        fees = trade_fees + settle_fees
         n_open = con.execute("SELECT COUNT(*) FROM paper_positions WHERE strategy=? AND settled=0", (name,)).fetchone()[0]
         accrual = nav0 * ((1 + SETTINGS.rwa_rate / 365) ** days - 1)
-        pnl = payoff - paid + recv
+        pnl = payoff - paid + recv - fees
         nav = nav0 + accrual + pnl
         rows.append(dict(date=date, strategy=name, nav=nav, cash=nav, rwa_accrual=accrual, option_pnl=pnl,
-                         premium_paid=paid, premium_received=recv, n_open=n_open))
+                         premium_paid=paid, premium_received=recv, n_open=n_open, fees_usd=fees))
     df = pd.DataFrame(rows)
     store.insert_df(con, "paper_nav", df)
     con.commit()

@@ -14,6 +14,7 @@ import pandas as pd
 from ..data.synthetic import MarketScenario, generate
 from ..risk.calibration import calibration_table
 from ..strategies import core
+from .costs import MODELS, with_costs
 from .metrics import nav_metrics
 
 SCENARIOS = {
@@ -29,7 +30,7 @@ def strategy_grid(quick=False):
     g = []
     for m, mode, bm in itertools.product((0.0, 0.5, 1.0, 1.5), ("daily", "event_only", "bank_event"), (1.0, 3.0)):
         g.append(("1_yield_funded_calls", dict(m=m, mode=mode, budget_mult=bm)))
-    solvers = (("greedy", 0.0), ("greedy", 0.5), ("sa", 0.5)) if not quick else (("greedy", 0.5),)
+    solvers = (("greedy", 0.0), ("greedy", 0.5), ("sa", 0.5), ("milp", 0.5)) if not quick else (("greedy", 0.5),)
     for solver, lam in solvers:
         g.append(("2_qubo_event_selector", dict(solver=solver, lam=lam, budget_mult=1.0)))
     for m, frac, skip, wing in itertools.product((1.0, 1.5, 2.0), (0.5, 1.0), (True, False), (None, 2.0)):
@@ -46,8 +47,12 @@ FUNCS = {
 }
 
 
-def run(seeds=(0, 1, 2), n_nights=600, warmup=200, quick=False, log=print):
-    rows, calib, perp = [], [], []
+def run(seeds=(0, 1, 2), n_nights=600, warmup=200, quick=False, log=print, cost_models=("none", "base", "stress")):
+    """Returns (metrics rows, calibration, perp table, nav curves).
+
+    nav curves: dict[(scenario, seed, idea, params, cost_model)] -> pd.Series of NAV over OOS nights.
+    Every strategy is run once per cost model (backtest.costs.MODELS) on the same generated market."""
+    rows, calib, perp, curves = [], [], [], {}
     for (sname, (vrp, evm)), seed in itertools.product(SCENARIOS.items(), seeds):
         t = time.time()
         sc = MarketScenario(n_nights=n_nights, vrp=vrp, event_iv_markup=evm, seed=seed)
@@ -63,13 +68,18 @@ def run(seeds=(0, 1, 2), n_nights=600, warmup=200, quick=False, log=print):
             perp.append(pv)
         # benchmark: RWA only
         bench = pd.Series([(1 + 0.045 / 365) ** (i + 1) for i in range(n_nights - warmup)])
-        rows.append({"scenario": sname, "seed": seed, "idea": "0_rwa_only", "params": "{}", **nav_metrics(bench)})
-        for idea, params in strategy_grid(quick):
-            kw = dict(params)
-            if idea == "2_qubo_event_selector":
-                kw["seed"] = seed
-            nav, info = FUNCS[idea](chain, warmup, **kw)
-            rows.append({"scenario": sname, "seed": seed, "idea": idea,
-                         "params": str(params), **nav_metrics(nav), **info})
+        for cm_name in cost_models:
+            cm = MODELS[cm_name]
+            chain_c = with_costs(chain, cm)
+            rows.append({"scenario": sname, "seed": seed, "idea": "0_rwa_only", "params": "{}", "cost_model": cm_name, **nav_metrics(bench)})
+            curves[(sname, seed, "0_rwa_only", "{}", cm_name)] = bench
+            for idea, params in strategy_grid(quick):
+                kw = dict(params)
+                if idea == "2_qubo_event_selector":
+                    kw["seed"] = seed
+                nav, info = FUNCS[idea](chain_c, warmup, costs=(cm_name != "none"), **kw)
+                rows.append({"scenario": sname, "seed": seed, "idea": idea, "params": str(params), "cost_model": cm_name,
+                             **nav_metrics(nav), **info})
+                curves[(sname, seed, idea, str(params), cm_name)] = nav
         log(f"{sname:20s} seed={seed}  {time.time() - t:5.1f}s")
-    return pd.DataFrame(rows), pd.concat(calib), pd.concat(perp)
+    return pd.DataFrame(rows), pd.concat(calib), pd.concat(perp), curves

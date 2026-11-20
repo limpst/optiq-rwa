@@ -43,12 +43,13 @@ CREATE TABLE IF NOT EXISTS volume_daily (date TEXT, base TEXT, volume_usd REAL, 
     n_listed INTEGER, universe_pass INTEGER, PRIMARY KEY (date, base));
 CREATE TABLE IF NOT EXISTS paper_orders (order_id INTEGER PRIMARY KEY AUTOINCREMENT, ts_ms INTEGER, date TEXT,
     strategy TEXT, instrument_name TEXT, side TEXT, qty REAL, limit_px REAL, status TEXT, fill_px REAL,
-    fill_usd REAL, fill_ts_ms INTEGER, spot REAL, snap_id INTEGER, note TEXT);
+    fill_usd REAL, fill_ts_ms INTEGER, spot REAL, snap_id INTEGER, note TEXT,
+    fee_usd REAL, slippage_usd REAL, levels_used INTEGER);
 CREATE TABLE IF NOT EXISTS paper_positions (pos_id INTEGER PRIMARY KEY AUTOINCREMENT, strategy TEXT,
     instrument_name TEXT, side TEXT, qty REAL, entry_px REAL, entry_usd REAL, entry_ts_ms INTEGER,
-    expiry_ts INTEGER, spot_entry REAL, settled INTEGER DEFAULT 0, settle_px REAL, payoff_usd REAL, pnl_usd REAL);
+    expiry_ts INTEGER, spot_entry REAL, settled INTEGER DEFAULT 0, settle_px REAL, payoff_usd REAL, pnl_usd REAL, settle_fee_usd REAL);
 CREATE TABLE IF NOT EXISTS paper_nav (date TEXT, strategy TEXT, nav REAL, cash REAL, rwa_accrual REAL,
-    option_pnl REAL, premium_paid REAL, premium_received REAL, n_open INTEGER, PRIMARY KEY (date, strategy));
+    option_pnl REAL, premium_paid REAL, premium_received REAL, n_open INTEGER, fees_usd REAL, PRIMARY KEY (date, strategy));
 CREATE INDEX IF NOT EXISTS ix_bs_inst ON book_summary (instrument_name, snap_id);
 CREATE INDEX IF NOT EXISTS ix_ob_inst ON order_book (instrument_name, snap_id);
 CREATE INDEX IF NOT EXISTS ix_snap_date ON snapshots (date);
@@ -72,6 +73,12 @@ def _migrate(con: sqlite3.Connection) -> None:
     cols = {r[1] for r in con.execute("PRAGMA table_info(instruments)")}
     if "min_trade_amount" not in cols:
         con.execute("ALTER TABLE instruments ADD COLUMN min_trade_amount REAL")
+    for table, col, typ in (("paper_orders", "fee_usd", "REAL"), ("paper_orders", "slippage_usd", "REAL"),
+                            ("paper_orders", "levels_used", "INTEGER"), ("paper_positions", "settle_fee_usd", "REAL"),
+                            ("paper_nav", "fees_usd", "REAL")):
+        have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        if col not in have:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
 
 
 def utc_date(ts_ms: int) -> str:

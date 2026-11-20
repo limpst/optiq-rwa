@@ -142,6 +142,34 @@ def read_csv(p: pathlib.Path) -> pd.DataFrame:
     return pd.read_csv(p) if p.exists() else pd.DataFrame()
 
 
+def curves_block() -> dict:
+    """Equity curves (TC on/off) + SR/IR/MDD/DSR tables for the real backtest and the synthetic sweep."""
+    out = {"real": {}, "sweep": {}, "real_table": [], "sweep_table": [], "highlight": {}}
+    try:
+        from ..backtest.metrics import HIGHLIGHT
+        out["highlight"] = dict(HIGHLIGHT)
+    except Exception:
+        pass
+    nv = RESULTS / "real" / "nav_series.csv"
+    if nv.exists():
+        ns = pd.read_csv(nv, index_col=0, parse_dates=True)
+        for c in ns.columns:
+            s_ = ns[c].dropna()
+            out["real"][c] = [{"time": int(t.timestamp()), "value": float(v)} for t, v in s_.items()]
+    sc = RESULTS / "sweep_curves.csv"
+    if sc.exists():
+        cs = pd.read_csv(sc, index_col=0)
+        for c in cs.columns:
+            s_ = cs[c].dropna()
+            out["sweep"][c] = [{"time": int(i), "value": float(v)} for i, v in s_.items()]
+    for p in sorted((RESULTS / "real").glob("strategies_*.csv")):
+        out["real_table"] += _records(read_csv(p).round(4))
+    sw = read_csv(RESULTS / "sweep_summary.csv")
+    if not sw.empty and "cost_model" in sw.columns:
+        out["sweep_table"] = _records(sw.round(4))
+    return out
+
+
 def regime_block(con) -> dict:
     """Latest regime per base (risk.regime.classify_live) + monthly label share from results/regime_history.csv."""
     out = {"live": [], "monthly": []}
@@ -151,6 +179,15 @@ def regime_block(con) -> dict:
         out["live"] = _records(live.round(3))
     except Exception as e:          # short live history / missing raw chains must not break the page
         out["error"] = str(e)[:200]
+    out["validation"] = _records(read_csv(RESULTS / "regime_validation.csv").round(4))
+    nv = {}
+    for p in sorted(RESULTS.glob("regime_validation_nav_*.csv")):
+        nv[p.stem.split("_")[-1]] = _records(read_csv(p).round(4))
+    out["validation_nav"] = nv
+    cur = RESULTS / "regime_validation_curves.csv"
+    if cur.exists():
+        cs = pd.read_csv(cur, index_col=0, parse_dates=True)
+        out["validation_curves"] = {c: [{"time": int(t.timestamp()), "value": float(v)} for t, v in cs[c].dropna().items()] for c in cs.columns}
     hist = read_csv(RESULTS / "regime_history.csv")
     if not hist.empty and {"coin", "date", "label"} <= set(hist.columns):
         hist["month"] = pd.to_datetime(hist.date).dt.strftime("%Y-%m")
@@ -218,6 +255,7 @@ def build_bundle(con=None) -> dict:
         "paper": paper, "periods": periods, "sweep": sweep_rows, "perp": _records(perp.round(4)) if not perp.empty else [],
         "real": real,
         "regime": regime_block(con),
+        "curves": curves_block(),
         "events": _records(read_csv(ROOT / "data" / "events.csv")),
     }
 
