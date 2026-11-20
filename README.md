@@ -4,7 +4,72 @@
 
 토큰화 실물자산(RWA, 예: 토큰화 국채)으로 안정적인 기초 수익을 확보하고, 그 수익을 예산으로 삼아 크립토 데일리 옵션 포지션을 운용·최적화하는 사이드 프로젝트입니다. 데일리 옵션은 손실이 프리미엄으로 제한되고 하룻밤 사이에 수익이 크게 날 수 있는 구조지만, 평균적으로 싸지는 않습니다. 이 프로젝트는 **어떤 시장 조건에서, 어떤 구조가, 언제 의미가 있는지**를 데이터로 판별하는 것이 목표입니다.
 
-> 상태: 🧪 v0.1, 다섯 가지 아이디어 모두 구현, 합성 데이터로 전략 스윕 완료 / 실데이터(Deribit) 검증 전
+> 상태: 🧪 v0.2 — 라이브 Deribit 수집 (SQLite · 15분 launchd) · dry-run paper 엔진 · 실데이터 backtest · 대시보드. 실주문 없음.
+
+---
+
+## v0.2 — 라이브 데이터 · paper trading · 대시보드 (2026-11-20)
+
+단계: 2 (데이터) · 4 (알파 검증) · 9 (backtest) · 10 (주문 실행, dry-run). 기여 WP: OptiQ-RWA.
+
+### 구성
+
+| 모듈 | 역할 |
+|---|---|
+| `src/optiq_rwa/data/store.py` | SQLite 한 파일 (`data/optiq.db`) + Parquet 일별 export (`data/parquet/`) |
+| `src/optiq_rwa/data/live.py` | 15분 snapshot: instruments · book summary (전 종목) · order book depth 5 + greeks (universe + focus base, 가까운 만기 2개, \|m\| ≤ 2.5) · index · delivery price |
+| `src/optiq_rwa/paper/engine.py` | dry-run 주문. 매수 = best ask, 매도 = best bid. 결제 = Deribit delivery price. private endpoint 호출 없음 |
+| `src/optiq_rwa/backtest/periods.py` | 일 · 주 · 월 기간별 수익 · 초과 · MDD |
+| `src/optiq_rwa/dashboard/app.py` | FastAPI + TradingView lightweight-charts. `scripts/export_dashboard.py` 가 정적 `docs/index.html` 생성 |
+| `scripts/run_real_backtest.py` | `data/raw/*_chain.parquet` (Deribit 체결 이력) 로 Idea 1 · 3 · 4 backtest → `results/real/` |
+| `scripts/launchd/` | `com.optiq.snapshot` (900초) · `com.optiq.trade` (04:20 KST) · `com.optiq.settle` (17:30 KST, 결제 · NAV · export · DB commit) |
+
+### Universe 필터 (하루 option 거래량 10억 원 이상, 2026-11-20 24h)
+
+| base | 24h volume | 통과 |
+|---|---:|:--:|
+| BTC (inverse) | 882억 원 | ✅ |
+| ETH (inverse) | 116억 원 | ✅ |
+| BTC_USDC | 33억 원 | ✅ |
+| SOL_USDC | 6.7억 원 | ❌ (focus base 로 수집만) |
+| ETH_USDC · HYPE · XRP · AVAX · TRX | 0.2~4.8억 원 | ❌ |
+
+### 실데이터 backtest (Deribit 체결 VWAP chain, 2026-05-01 ~ 11-18)
+
+호가는 19:20 UTC ±20분 체결 VWAP + 모델 spread(10% + 2bp). 실제 체결 가능 가격이 아니다. 자세한 표: `results/real/SUMMARY_REAL.md`.
+
+| 코인 | 항목 | 값 |
+|---|---|---|
+| BTC | m=1 콜 payback (mid / ask) | 0.77 / 0.59 |
+| BTC | 모델 P(ITM) vs 실제, m=1 | 14.3% vs 10.2% |
+| BTC | Idea 1 매일 콜 매수 (m=1, bm=1) | 연 3.2% (RWA 4.5% 대비 −1.3%p) |
+| BTC | Idea 3 strangle 매도 m=1.5 wing 없음 frac 0.5 (61밤) | 연 8.1% (+3.6%p), 최악 밤 −0.5% |
+| SOL | m=1 콜 payback (mid / ask) | 0.78 / 0.66 (32밤, 얇음) |
+
+해석: 참고 사례 (SOL, ask 기준 0.65) 와 같은 결과다. 지난 6개월 BTC · SOL 데일리 콜은 ask 로 사면 1달러당 0.6~0.7 달러를 돌려줬다. 매수는 IV 가 싼 밤을 골라야 하고, 매도는 꼬리 (wing) 비용을 낸 뒤에도 남는지 더 긴 표본이 필요하다.
+
+### 실행
+
+```bash
+cp .env.example .env                      # Deribit key 는 선택 (paper 는 public API 만 사용)
+PYTHONPATH=src python -m optiq_rwa.data.live snapshot      # 1회 수집 (~90초)
+PYTHONPATH=src python -m optiq_rwa.data.live status
+PYTHONPATH=src python -m optiq_rwa.paper.engine trade      # dry-run 주문 (만기 6~26시간 남은 chain)
+PYTHONPATH=src python -m optiq_rwa.paper.engine settle && PYTHONPATH=src python -m optiq_rwa.paper.engine nav
+PYTHONPATH=src python scripts/run_real_backtest.py
+PYTHONPATH=src uvicorn optiq_rwa.dashboard.app:app --port 8793   # http://127.0.0.1:8793
+PYTHONPATH=src python scripts/export_dashboard.py                 # docs/index.html
+./scripts/install_launchd.sh                                      # 자동 수집 · paper 일과 등록
+pytest -q                                                         # 7 tests
+```
+
+### 한계 (v0.2)
+
+- Deribit 은 과거 호가창을 제공하지 않는다. 실제 bid/ask 이력은 라이브 snapshot 으로 지금부터 쌓인다.
+- SOL 과거 chain 은 strike 당 2~61 밤으로 매우 얇다.
+- paper NAV 는 열린 포지션을 0 으로 평가한다 (매수 보수적 · 매도 과대).
+- 이벤트 캘린더가 없어 event-only 모드는 실데이터에서 돌리지 않았다.
+- API key 는 trade 권한이 있다. 코드는 private endpoint 를 호출하지 않지만 read-only key 로 바꾸는 것이 안전하다.
 
 ---
 

@@ -1,7 +1,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-/data/
-*.parquet
 .venv/
 .env
+data/raw/
+*.log
+data/logs/
+*.db-wal
+*.db-shm

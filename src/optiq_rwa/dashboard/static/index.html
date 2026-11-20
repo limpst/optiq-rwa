@@ -1,0 +1,446 @@
+<title>OptiQ-RWA Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column desk, sticky top bar (title · KR|EN · theme), summary tiles -> charts -> tables -> method sections */
+:root{
+  --bg:#f6f7f4; --panel:#ffffff; --fg:#1b2430; --muted:#5b6774; --line:#d9ded8;
+  --accent:#0f6e56; --accent-2:#2a5db0; --ok:#1e7f4f; --warn:#b26a00; --bad:#b3261e;
+  --issue-bg:#fff3b0; --issue-fg:#b3261e;
+  --font:"IBM Plex Sans KR",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --s1:#0f6e56; --s2:#2a5db0; --s3:#b26a00; --s4:#7b3fa0; --s5:#b3261e; --s6:#4b5563;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#101418;--panel:#171c22;--fg:#e8ecef;--muted:#9aa6b2;--line:#2a323b;--accent:#4fc39d;--accent-2:#7aa7ff;--ok:#4fc39d;--warn:#f0b35a;--bad:#ff7b72;--issue-bg:#4a3f00;--issue-fg:#ffb4ad;--s1:#4fc39d;--s2:#7aa7ff;--s3:#f0b35a;--s4:#c79bff;--s5:#ff7b72;--s6:#aab4bf;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101418;--panel:#171c22;--fg:#e8ecef;--muted:#9aa6b2;--line:#2a323b;--accent:#4fc39d;--accent-2:#7aa7ff;--ok:#4fc39d;--warn:#f0b35a;--bad:#ff7b72;--issue-bg:#4a3f00;--issue-fg:#ffb4ad;--s1:#4fc39d;--s2:#7aa7ff;--s3:#f0b35a;--s4:#c79bff;--s5:#ff7b72;--s6:#aab4bf;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.55;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+.wrap{max-width:1180px;margin:0 auto;padding-block:0 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--panel);border-bottom:1px solid var(--line)}
+header.bar .wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:10px}
+header h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.2px}
+header .sub{color:var(--muted);font-size:13px;flex:1 1 auto;min-width:0}
+.btns{display:flex;gap:6px}
+.btn{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+.btn[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+h2{font-size:20px;margin:36px 0 10px;font-weight:600;text-wrap:balance}
+h3{font-size:16px;margin:22px 0 8px;font-weight:600}
+p{max-width:72ch;margin:6px 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:16px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.tile .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tile .v{font-family:var(--mono);font-size:22px;font-variant-numeric:tabular-nums;margin-top:4px}
+.tile .d{font-size:12px;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-top:12px;min-width:0}
+.chart{height:300px;width:100%;position:relative}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:13px}
+select{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:3px 8px}
+.cap{font-size:13px;color:var(--muted);margin-top:6px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;white-space:nowrap}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+td.wrap-ok{white-space:normal}
+.issue{background:var(--issue-bg);color:var(--issue-fg);font-weight:500}
+.issue-box{background:var(--issue-bg);color:var(--issue-fg);border-radius:8px;padding:12px 14px;margin-top:12px;font-weight:500}
+.issue-box p,.issue-box li{color:var(--issue-fg);max-width:none}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600}
+.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.bad{background:var(--issue-bg);color:var(--issue-fg)}
+dfn{font-style:normal;border-bottom:1px dotted var(--accent-2);cursor:help;position:relative}
+#tip{position:fixed;z-index:50;max-width:320px;background:var(--fg);color:var(--bg);font-size:12.5px;line-height:1.45;padding:8px 10px;border-radius:6px;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+#tip[hidden]{display:none}
+.formula{font-family:var(--mono);font-size:15px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0;overflow-x:auto}
+svg text{fill:var(--fg);font-family:var(--font);font-size:12px}
+svg .ax{stroke:var(--line)} svg .mut{fill:var(--muted)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+ul{margin:6px 0;padding-left:22px} li{margin:3px 0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+a{color:var(--accent-2)}
+.small{font-size:12.5px;color:var(--muted)}
+.step{display:inline-block;border:1px solid var(--line);border-radius:5px;padding:0 7px;font-size:12px;color:var(--muted);margin-left:6px}
+[lang-hide]{display:none}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+<script id="data" type="application/json">null</script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<header class="bar"><div class="wrap">
+  <h1>OptiQ-RWA Desk</h1>
+  <div class="sub"><span data-t="sub"></span> · <span id="gen" class="mono"></span></div>
+  <div class="btns" role="group" aria-label="language">
+    <button class="btn" id="btn-kr" aria-pressed="true" onclick="setLang('kr')">KR</button>
+    <button class="btn" id="btn-en" aria-pressed="false" onclick="setLang('en')">EN</button>
+    <button class="btn" id="btn-theme" onclick="toggleTheme()" title="theme">☼/☾</button>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <div class="tiles" id="tiles"></div>
+  <div id="issues"></div>
+
+  <h2 data-t="h_why"></h2>
+  <div class="two">
+    <div><h3 data-t="h_why1"></h3><p data-t="p_why"></p></div>
+    <div><h3 data-t="h_bg"></h3><p data-t="p_bg"></p><p data-t="p_bg2"></p></div>
+  </div>
+
+  <h2 data-t="h_live"></h2>
+  <div class="row">
+    <div class="panel"><div class="ctl"><label for="sel-base" data-t="l_base"></label><select id="sel-base"></select><span class="small" id="base-info"></span></div>
+      <div class="chart" id="ch-index"></div><p class="cap" data-t="cap_index"></p></div>
+    <div class="panel"><div class="chart" id="ch-iv"></div><p class="cap" data-t="cap_iv"></p></div>
+  </div>
+  <div class="row">
+    <div class="panel"><h3 data-t="h_smile"></h3><div id="smile"></div><p class="cap" data-t="cap_smile"></p></div>
+    <div class="panel"><h3 data-t="h_universe"></h3><div class="tbl" id="universe"></div><p class="cap" data-t="cap_universe"></p></div>
+  </div>
+
+  <h2 data-t="h_paper"></h2>
+  <div class="row">
+    <div class="panel"><div class="chart" id="ch-nav"></div><div class="legend" id="lg-nav"></div><p class="cap" data-t="cap_nav"></p></div>
+    <div class="panel"><h3 data-t="h_periods"></h3><div class="ctl"><select id="sel-period"><option value="W">Weekly</option><option value="M">Monthly</option></select><select id="sel-strat"></select></div><div class="tbl" id="periods"></div><p class="cap" data-t="cap_periods"></p></div>
+  </div>
+  <div class="panel"><h3 data-t="h_orders"></h3><div class="tbl" id="orders"></div><p class="cap" data-t="cap_orders"></p></div>
+
+  <h2 data-t="h_real"></h2>
+  <div class="row">
+    <div class="panel"><div class="chart" id="ch-real"></div><div class="legend" id="lg-real"></div><p class="cap" data-t="cap_real"></p></div>
+    <div class="panel"><h3 data-t="h_calib"></h3><div class="ctl"><select id="sel-calib"></select></div><div id="calib"></div><p class="cap" data-t="cap_calib"></p></div>
+  </div>
+  <div class="panel"><h3 data-t="h_realtbl"></h3><div class="tbl" id="realtbl"></div><p class="cap" data-t="cap_realtbl"></p></div>
+
+  <h2 data-t="h_sweep"></h2>
+  <div class="panel"><div class="tbl" id="sweep"></div><p class="cap" data-t="cap_sweep"></p></div>
+  <div class="panel"><h3 data-t="h_perp"></h3><div class="tbl" id="perp"></div><p class="cap" data-t="cap_perp"></p></div>
+
+  <h2 data-t="h_method"></h2>
+  <h3 data-t="h_f1"></h3>
+  <div class="formula">σ√T = IV · √(h / 8760)</div>
+  <div class="tbl" id="sym1"></div>
+  <div class="two"><div id="fig1"></div><p class="cap" data-t="cap_fig1"></p></div>
+  <h3 data-t="h_f2"></h3>
+  <div class="formula">m = ln(K / S) / σ√T &nbsp;&nbsp;&nbsp; payback_ask = payoff / ask &nbsp;&nbsp;&nbsp; payoff = max(S_T − K, 0)</div>
+  <div class="tbl" id="sym2"></div>
+  <div class="two"><div id="fig2"></div><p class="cap" data-t="cap_fig2"></p></div>
+  <h3 data-t="h_f3"></h3>
+  <div class="formula">NAV_t = NAV_0 · (1 + r_rwa/365)^t − Σ premium_paid + Σ premium_received + Σ payoff_settled</div>
+  <div class="tbl" id="sym3"></div>
+  <div class="two"><div id="fig3"></div><p class="cap" data-t="cap_fig3"></p></div>
+
+  <h2 data-t="h_opt"></h2>
+  <div class="formula">min_x &nbsp; −Σ_i e_i x_i + λ Σ_i v_i x_i + ρ Σ_{i&lt;j, same night} x_i x_j + P (Σ_i x_i − K)² &nbsp;&nbsp; x_i ∈ {0,1}</div>
+  <div class="tbl" id="sym4"></div>
+  <p data-t="p_opt"></p>
+  <div class="two"><div id="fig4"></div><p class="cap" data-t="cap_fig4"></p></div>
+
+  <h2 data-t="h_biz"></h2>
+  <ul id="biz"></ul>
+
+  <h2 data-t="h_data"></h2>
+  <div class="tbl" id="datatbl"></div>
+
+  <h2 data-t="h_gloss"></h2>
+  <div class="tbl" id="gloss"></div>
+  <h3 data-t="h_not"></h3>
+  <div class="tbl" id="notation"></div>
+
+  <h2 data-t="h_work"></h2>
+  <div class="two"><div><h3>Work done</h3><ul id="done"></ul></div><div><h3>Work in progress</h3><ul id="wip"></ul></div></div>
+
+  <h2 data-t="h_lim"></h2>
+  <div class="issue-box"><ul id="lims"></ul></div>
+
+  <h2 data-t="h_links"></h2>
+  <ul id="links"></ul>
+  <p class="small" data-t="p_foot"></p>
+</main>
+<div id="tip" hidden></div>
+
+<script>
+const T = {
+ sub:["RWA 이자로 운용하는 crypto 0DTE option desk · Deribit public data · paper trading only","RWA-yield-funded crypto 0DTE option desk · Deribit public data · paper trading only"],
+ h_why:["왜 이 일을 하는가 · Background","Why this work · Background"], h_why1:["목적","Purpose"], h_bg:["Background · 현황","Background · Status"],
+ p_why:["토큰화 국채 (RWA) 는 연 4~5% 이자를 준다. 이 이자만 써서 하루짜리 crypto option (0DTE) 을 사면 원금은 지키고 상승에만 노출된다. 반대로 RWA 를 담보로 option 을 팔면 프리미엄을 받지만 꼬리 위험을 진다. 이 페이지는 어느 시장 상태에서 어느 구조가 돈이 되는지 실데이터로 판별한다.","Tokenised T-bills (RWA) pay 4-5% a year. Spending only that yield on one-day crypto options (0DTE) keeps principal intact with upside exposure. Selling options against the RWA collects premium but takes tail risk. This page tests, on real data, which structure pays in which market state."],
+ p_bg:["v0.1 에서 다섯 아이디어를 코드로 만들고 합성 데이터로 sweep 했다. 결론은 수익은 상품 구조가 아니라 가격 (IV 가 비싼가) 에서 나온다는 것이었다.","v0.1 implemented five ideas and swept them on synthetic data. Conclusion: returns come from pricing (is IV rich?) not from product structure."],
+ p_bg2:["v0.2 (이 페이지) 는 Deribit 실데이터를 15분마다 SQLite 에 쌓고, 실제 호가로 dry-run 주문을 내고, 과거 체결 데이터로 backtest 한다. 실주문은 보내지 않는다.","v0.2 (this page) stores Deribit data in SQLite every 15 minutes, places dry-run orders on real quotes and backtests on trade history. No live orders are sent."],
+ h_live:["라이브 시장 (snapshot)","Live market (snapshots)"], l_base:["base","base"],
+ cap_index:["index price 를 snapshot 마다 찍은 선. 15분 간격.","Index price at each snapshot, 15-minute cadence."],
+ cap_iv:["가장 가까운 만기의 ATM mark IV (%). 높을수록 option 이 비싸다.","ATM mark IV (%) of the nearest expiry. Higher = options are richer."],
+ h_smile:["IV smile (최신 chain)","IV smile (latest chain)"], cap_smile:["가로 m (σ√T 단위 거리), 세로 IV. 점이 비어 있는 곳은 호가가 없는 strike.","x = m (distance in σ√T units), y = IV. Gaps are strikes with no quote."],
+ h_universe:["Universe · 거래량 필터","Universe · volume filter"], cap_universe:["Deribit 24h option 거래량 (USD → 억 원). 10억 원 미만은 이슈 색. 미달 base 는 전략에서 빼고 focus base (SOL_USDC) 만 예외로 수집한다.","Deribit 24h option volume (USD → KRW 100M). Below KRW 1bn is flagged. Failing bases are excluded from strategies, except focus bases (SOL_USDC)."],
+ h_paper:["Paper book (dry-run)","Paper book (dry-run)"], cap_nav:["전략별 paper NAV (USD). 열린 포지션은 0 으로 평가해 보수적이다.","Paper NAV per strategy (USD). Open positions carried at zero (conservative)."],
+ h_periods:["기간별 수익","Period returns"], cap_periods:["주 · 월 단위 수익, RWA 대비 초과, 최대 낙폭. 자료가 1일뿐이면 비어 있다.","Weekly / monthly return, excess over RWA, max drawdown. Empty until more than one day of NAV."],
+ h_orders:["최근 dry-run 주문","Recent dry-run orders"], cap_orders:["매수는 best ask, 매도는 best bid 로 가상 체결. status=rejected 는 호가 없음.","Buys fill at best ask, sells at best bid. status=rejected means no quote."],
+ h_real:["실데이터 backtest (Deribit 체결 이력)","Real-data backtest (Deribit trade history)"], cap_real:["BTC · SOL 과거 체결 VWAP 으로 만든 chain 에 아이디어 1 · 3 을 적용한 NAV. 시작 1.0.","NAV of ideas 1 and 3 on chains built from BTC / SOL trade VWAPs. Start 1.0."],
+ h_calib:["Idea 4 · 확률 보정","Idea 4 · probability calibration"], cap_calib:["m 구간별 모델 ITM 확률 (연한 막대) 과 실제 ITM 비율 (진한 막대). 실제가 낮으면 call 이 비싸다는 뜻.","Model ITM probability (light) vs realised ITM rate (dark) per m bucket. Realised below model means calls are rich."],
+ h_realtbl:["실데이터 전략 표","Real-data strategy table"], cap_realtbl:["payback_ask = 1달러 ask 지불당 회수액. 1 미만이면 매수가 손해.","payback_ask = payoff per $1 paid at ask. Below 1 means buying loses."],
+ h_sweep:["합성 데이터 sweep (v0.1, 시나리오별 최고)","Synthetic sweep (v0.1, best per scenario)"], cap_sweep:["4 시나리오 × 5 아이디어, 표본 외 700일, seed 3개 평균. Sharpe 기준 아이디어별 최고 파라미터.","4 scenarios × 5 ideas, 700 OOS nights, 3-seed mean. Best parameters per idea by Sharpe."],
+ h_perp:["Idea 5 · 100배 무기한선물 vs 데일리 콜","Idea 5 · 100x perp vs daily call"], cap_perp:["1달러 위험당 거래 통계 (base 시나리오). liquidation_rate 는 밤사이 청산 비율.","Per-$1-at-risk trade statistics (base scenario). liquidation_rate = overnight liquidation share."],
+ h_method:["수식과 그림","Formulas and figures"],
+ h_f1:["σ√T · 하룻밤 표준 움직임","σ√T · one-night standard move"], cap_fig1:["왼쪽: IV 와 남은 시간이 주는 σ√T. 지금 chain 의 값으로 그렸다.","Left: σ√T from IV and hours to expiry, drawn with the current chain's values."],
+ h_f2:["m · payback","m · payback"], cap_fig2:["spot 에서 strike 까지의 거리를 σ√T 로 나눈 것이 m. 결제가가 strike 를 넘은 만큼이 payoff.","m is the spot-to-strike distance divided by σ√T. Payoff is the settlement above the strike."],
+ h_f3:["Paper NAV","Paper NAV"], cap_fig3:["NAV 의 구성: RWA 이자 누적, 지불 프리미엄, 수취 프리미엄, 결제 payoff.","NAV decomposition: RWA accrual, premium paid, premium received, settled payoff."],
+ h_opt:["최적화 문제 정의 (Idea 2 · QUBO)","Optimisation problem (Idea 2 · QUBO)"],
+ p_opt:["결정변수 x_i: 이번 주 (night, coin, strike) 후보 i 를 사면 1. 목적: 기대 edge 합을 최대로, 분산 (λ) 과 같은 밤 중복 (ρ) 을 벌점으로. 제약: 주당 K 단위 예산 (벌점 P 로 soft 처리, 초과 시 greedy 보정). solver: simulated annealing 또는 greedy. 현재 SA 가 greedy 보다 못하다 (이슈).","Decision x_i = 1 if candidate i (night, coin, strike) this week is bought. Objective: maximise expected edge, penalise variance (λ) and same-night concentration (ρ). Constraint: K units per week (soft penalty P, greedy repair). Solvers: simulated annealing or greedy. SA currently underperforms greedy (issue)."],
+ cap_fig4:["한 주의 후보 격자에서 K=7 단위를 고르는 그림. 색이 진할수록 edge 가 크다.","Choosing K=7 units from a week's candidate grid. Darker = larger edge."],
+ h_biz:["비즈니스 의미","Business meaning"], h_data:["데이터","Data"], h_gloss:["용어 정리","Glossary"], h_not:["Notation","Notation"],
+ h_work:["Work done · Work in progress","Work done · Work in progress"], h_lim:["Limitation · 이슈","Limitations · issues"], h_links:["상호 링크","Related links"],
+ p_foot:["단계: 2 (데이터) · 4 (알파 검증) · 9 (backtest) · 10 (주문 실행 dry-run). 기여 WP: OptiQ-RWA v0.2. 모든 가격은 Deribit public API, 실주문 없음.","Steps: 2 (data) · 4 (alpha validation) · 9 (backtest) · 10 (execution, dry-run). Contributing WP: OptiQ-RWA v0.2. All prices from Deribit public API, no live orders."],
+};
+const G = { // glossary: term -> [kr, en]
+ "RWA":["Real-World Asset. 토큰화 국채처럼 블록체인에 올린 실물자산. 여기서는 연 4.5% 이자를 주는 기초 수익원.","Real-World Asset: tokenised T-bills etc. Here the 4.5%/yr base yield."],
+ "0DTE":["Zero Days To Expiry. 당일 (하룻밤) 만기 option. Deribit 은 매일 08:00 UTC 결제.","Zero Days To Expiry: options expiring the same day. Deribit settles daily at 08:00 UTC."],
+ "IV":["Implied Volatility. option 가격에 들어 있는 연율 변동성. 높으면 option 이 비싸다.","Implied Volatility: annualised volatility priced into the option. High = rich options."],
+ "σ√T":["하룻밤 표준 움직임. IV 에 남은 시간의 제곱근을 곱한 값. 데일리 option 은 이 거리에 거는 베팅.","One-night standard move: IV times the square root of time left. A daily option bets on this distance."],
+ "m":["moneyness. strike 가 spot 에서 σ√T 몇 개 떨어져 있는가. m=1 콜은 1σ 밖.","Moneyness: how many σ√T the strike is from spot. An m=1 call is 1σ out."],
+ "payback":["1달러 지불당 회수액. ask 기준이 실제 매수 결과. 1 미만이면 손해.","Payoff per $1 paid. The ask version is what a buyer gets. Below 1 loses."],
+ "ITM":["In The Money. 만기에 결제가가 strike 를 넘어 payoff 가 생긴 상태.","In The Money: settlement beyond the strike, so the option pays."],
+ "mark IV":["Deribit 가 계산한 공정 IV. 호가가 없어도 있다.","Deribit's fair IV estimate, available even without quotes."],
+ "best bid / best ask":["가장 높은 매수 호가 / 가장 낮은 매도 호가. 살 때는 ask, 팔 때는 bid 로 체결한다고 본다.","Highest buy quote / lowest sell quote. We assume buying at ask, selling at bid."],
+ "paper trading":["dry-run. 실제 호가로 가상 체결만 기록하고 거래소에 주문을 보내지 않는다.","Dry-run: record simulated fills on real quotes, send nothing to the exchange."],
+ "NAV":["Net Asset Value. 전략 계좌의 평가액 (USD).","Net Asset Value of the strategy account (USD)."],
+ "MDD":["Max Drawdown. 고점 대비 최대 하락 폭.","Maximum peak-to-trough decline."],
+ "Sharpe":["(평균 초과수익) / 변동성. 여기서는 RWA 수익 대비.","Mean excess return over volatility, here versus the RWA yield."],
+ "CVaR 5%":["하위 5% 밤의 평균 손실.","Mean loss of the worst 5% of nights."],
+ "QUBO":["Quadratic Unconstrained Binary Optimization. 0/1 변수의 2차식을 최소화하는 문제. Idea 2 의 선택 문제를 이 형태로 쓴다.","Quadratic Unconstrained Binary Optimization: minimise a quadratic in 0/1 variables. Idea 2 is written this way."],
+ "simulated annealing":["QUBO 를 푸는 확률적 탐색. 온도를 낮추며 나쁜 수도 가끔 받아들인다.","Stochastic search for QUBO: accepts worse moves with decreasing temperature."],
+ "greedy":["edge 가 큰 후보부터 하나씩 고르는 단순 규칙.","Pick candidates one by one by largest edge."],
+ "iron condor":["strangle 매도 + 바깥 wing 매수. 손실 상한이 있는 프리미엄 매도.","Short strangle plus protective wings: capped-loss premium selling."],
+ "strangle":["같은 만기의 OTM call 과 OTM put 을 함께 파는 (또는 사는) 구조.","Selling (or buying) an OTM call and OTM put of the same expiry."],
+ "VWAP":["Volume Weighted Average Price. 거래량 가중 평균 체결가. 과거 chain 의 가격 출처.","Volume-weighted average trade price: the price source of the historical chains."],
+ "delivery price":["Deribit 의 만기 결제가 (08:00 UTC 지수 평균).","Deribit's settlement price at expiry (08:00 UTC index average)."],
+ "perp":["perpetual futures. 만기 없는 선물. 100배 레버리지는 1% 하락에 청산.","Perpetual futures. 100x leverage liquidates on a 1% move."],
+ "universe":["전략이 거래할 수 있는 base 집합. 하루 option 거래량 10억 원 이상.","Bases the strategies may trade: daily option volume ≥ KRW 1bn."],
+ "snapshot":["15분마다 Deribit 호가 · IV · 지수를 저장한 한 묶음.","One 15-minute capture of Deribit quotes, IV and index prices."],
+ "launchd":["macOS 의 예약 실행기. 15분 snapshot 과 하루 두 번 paper 작업을 돈다.","macOS scheduler running the 15-minute snapshot and twice-daily paper jobs."],
+ "SQLite":["파일 하나로 된 DB (data/optiq.db). 매일 GitHub 에 올린다.","Single-file database (data/optiq.db), committed to GitHub daily."],
+ "Parquet":["열 단위 압축 파일. 분석용 일별 사본.","Columnar compressed files: daily analysis copies."],
+ "walk-forward":["과거만 보고 모형을 맞추고 다음 구간에서 평가하는 방식.","Fit on the past only, evaluate on the next window."],
+ "OOS":["Out-Of-Sample. 모형을 맞출 때 쓰지 않은 구간.","Out-of-sample: data not used for fitting."],
+};
+const N = [["S","spot (index) price at entry","USD"],["K","strike","USD"],["S_T","settlement (delivery) price at 08:00 UTC","USD"],["h","hours to expiry","h"],["IV","implied volatility, annualised","1/yr"],["σ√T","one-night standard move","fraction of S"],["m","moneyness in σ√T units","-"],["ask, bid","best ask / bid, USD per unit of underlying","USD"],["payoff","max(S_T−K,0) call, max(K−S_T,0) put","USD"],["r_rwa","RWA yield","1/yr"],["NAV_t","paper NAV on day t","USD"],["e_i, v_i","expected buy edge and variance of candidate i","per $ premium"],["λ, ρ, P","variance, same-night and budget penalty weights","-"],["K (QUBO)","units per week","count"],["x_i","buy candidate i (1) or not (0)","{0,1}"]];
+
+let D = JSON.parse(document.getElementById('data').textContent);
+let lang = 'kr';
+try { lang = localStorage.getItem('optiq_lang') || 'kr'; } catch(e){}
+const isLocal = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+try { const th = localStorage.getItem('optiq_theme'); if (th) document.documentElement.dataset.theme = th; else if (isLocal) document.documentElement.dataset.theme = 'light'; } catch(e){ if (isLocal) document.documentElement.dataset.theme='light'; }
+function toggleTheme(){ const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); const nx = cur==='dark'?'light':'dark'; document.documentElement.dataset.theme = nx; try{localStorage.setItem('optiq_theme',nx);}catch(e){} render(); }
+function t(k){ const v = T[k]; return v ? v[lang==='kr'?0:1] : k; }
+function g(term){ const v=G[term]; return v ? v[lang==='kr'?0:1] : ''; }
+function dfn(term, label){ return `<dfn data-g="${term}">${label||term}</dfn>`; }
+function setLang(l){ lang=l; try{localStorage.setItem('optiq_lang',l);}catch(e){} render(); }
+const fmt = (x,d=2)=> (x===null||x===undefined||isNaN(x)) ? '–' : Number(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct = (x,d=1)=> (x===null||x===undefined||isNaN(x)) ? '–' : (100*x).toFixed(d)+'%';
+function table(cols, rows, cls){ // cols: [{k,h,num,f,cls(row)}]
+  let h='<table><thead><tr>'+cols.map(c=>`<th class="${c.num?'num':''}">${c.h}</th>`).join('')+'</tr></thead><tbody>';
+  for(const r of rows){ h+='<tr>'+cols.map(c=>{ const v=c.f?c.f(r[c.k],r):r[c.k]; const cc=(c.cls?c.cls(r):'')+(c.num?' num':''); return `<td class="${cc}">${v===null||v===undefined?'–':v}</td>`;}).join('')+'</tr>'; }
+  return h+'</tbody></table>';
+}
+// ---------- charts
+const charts = {};
+function mkChart(id, opts={}){
+  const el=document.getElementById(id); el.innerHTML='';
+  const css=getComputedStyle(document.documentElement);
+  const c=LightweightCharts.createChart(el,{autoSize:true,layout:{background:{type:'solid',color:'transparent'},textColor:css.getPropertyValue('--muted').trim(),fontFamily:css.getPropertyValue('--mono')},
+    grid:{vertLines:{color:css.getPropertyValue('--line').trim()},horzLines:{color:css.getPropertyValue('--line').trim()}},
+    rightPriceScale:{borderColor:css.getPropertyValue('--line').trim()},timeScale:{borderColor:css.getPropertyValue('--line').trim(),timeVisible:true,secondsVisible:false},
+    crosshair:{mode:0}, ...opts});
+  charts[id]=c; return c;
+}
+const palette = ()=>['--s1','--s2','--s3','--s4','--s5','--s6'].map(v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+function lines(id, seriesMap, legendId, fmtOpt){
+  const c=mkChart(id); const cols=palette(); let i=0; const lg=[];
+  for(const [name,data] of Object.entries(seriesMap)){
+    if(!data||!data.length) continue;
+    const col=cols[i%cols.length]; i++;
+    const s=c.addLineSeries({color:col,lineWidth:2,priceFormat:fmtOpt||{type:'price',precision:2,minMove:0.01}, title:name.length>24?name.slice(0,24)+'…':name});
+    s.setData(data.map(p=>({time:p.time,value:p.value}))); lg.push(`<span><i style="background:${col}"></i>${name}</span>`);
+  }
+  if(i===0){ document.getElementById(id).innerHTML=`<p class="cap" style="padding:20px">${lang==='kr'?'자료가 아직 없습니다 (snapshot 누적 뒤 표시).':'No data yet (appears as snapshots accumulate).'}</p>`; }
+  else c.timeScale().fitContent();
+  if(legendId) document.getElementById(legendId).innerHTML=lg.join('');
+}
+// ---------- SVG figures
+function svgSmile(ch){
+  if(!ch||!ch.rows.length) return '<p class="cap">–</p>';
+  const rows=ch.rows.filter(r=>r.iv!=null && Math.abs(r.m)<=3);
+  const W=520,H=230,L=46,R=14,Tp=14,B=34; const xs=rows.map(r=>r.m), ys=rows.map(r=>r.iv*100);
+  const x0=-3,x1=3,y0=Math.max(0,Math.floor(Math.min(...ys)/10)*10-10),y1=Math.ceil(Math.max(...ys)/10)*10+10;
+  const X=v=>L+(v-x0)/(x1-x0)*(W-L-R), Y=v=>Tp+(1-(v-y0)/(y1-y0))*(H-Tp-B);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="IV smile">`;
+  for(let v=y0;v<=y1;v+=Math.max(10,Math.round((y1-y0)/5/10)*10)) s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" class="mut">${v}%</text>`;
+  for(let v=x0;v<=x1;v++) s+=`<text x="${X(v)}" y="${H-10}" text-anchor="middle" class="mut">${v>0?'+':''}${v}</text>`;
+  s+=`<line class="ax" x1="${X(0)}" x2="${X(0)}" y1="${Tp}" y2="${H-B}" stroke-dasharray="3 3"/>`;
+  const cols=palette();
+  for(const kind of ['call','put']){ const col=kind==='call'?cols[0]:cols[1]; for(const r of rows.filter(r=>r.kind===kind)){ const q=r.bid!=null&&r.ask!=null; s+=`<circle cx="${X(r.m)}" cy="${Y(r.iv*100)}" r="${q?4:2.5}" fill="${q?col:'none'}" stroke="${col}" stroke-width="1.5"><title>${r.instrument_name} m=${r.m.toFixed(2)} IV=${(r.iv*100).toFixed(1)}% bid=${r.bid??'–'} ask=${r.ask??'–'}</title></circle>`;} }
+  s+=`<text x="${W/2}" y="${H-24}" text-anchor="middle" class="mut">m (σ√T units) · ${ch.hours.toFixed(1)}h to expiry · spot ${fmt(ch.spot,2)} · ATM IV ${(ch.iv_atm*100).toFixed(1)}%</text></svg>`;
+  s+=`<div class="legend"><span><i style="background:${cols[0]}"></i>call</span><span><i style="background:${cols[1]}"></i>put</span><span>${lang==='kr'?'빈 원 = 호가 없음 (mark IV 만)':'hollow = no quote (mark IV only)'}</span></div>`;
+  return s;
+}
+function svgCalib(rows){
+  if(!rows.length) return '<p class="cap">–</p>';
+  const W=520,H=230,L=46,R=14,Tp=14,B=34; const ms=rows.map(r=>r.m); const n=rows.length; const bw=(W-L-R)/n;
+  const Y=v=>Tp+(1-v)*(H-Tp-B); const cols=palette(); let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="calibration">`;
+  for(const v of [0,.25,.5]) s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" class="mut">${(v*100).toFixed(0)}%</text>`;
+  rows.forEach((r,i)=>{ const x=L+i*bw; const a=Math.min(r.p_itm_model,0.55),b=Math.min(r.p_itm_emp,0.55);
+    s+=`<rect x="${x+bw*0.12}" width="${bw*0.34}" y="${Y(a)}" height="${Y(0)-Y(a)}" fill="${cols[1]}" opacity=".45"><title>model ${pct(r.p_itm_model)}</title></rect>`;
+    s+=`<rect x="${x+bw*0.5}" width="${bw*0.34}" y="${Y(b)}" height="${Y(0)-Y(b)}" fill="${cols[1]}"><title>realised ${pct(r.p_itm_emp)} (n=${r.n})</title></rect>`;
+    s+=`<text x="${x+bw/2}" y="${H-10}" text-anchor="middle" class="mut">m=${r.m}</text><text x="${x+bw/2}" y="${Y(Math.max(a,b))-4}" text-anchor="middle" style="font-size:10px">${r.payback_ask!=null?('pb '+r.payback_ask.toFixed(2)):''}</text>`; });
+  s+=`<text x="${W/2}" y="${H-24}" text-anchor="middle" class="mut">${lang==='kr'?'연한 = 모델 P(ITM) · 진한 = 실제 · pb = payback at ask':'light = model P(ITM) · dark = realised · pb = payback at ask'}</text></svg>`;
+  return s;
+}
+function fig1(ch){ // sigma sqrt T diagram with actual values
+  const iv=ch?ch.iv_atm:0.6, h=ch?ch.hours:12.7, ss=iv*Math.sqrt(h/8760), S=ch?ch.spot:100;
+  const W=520,H=200; const X=v=>60+(v+3)/6*400; let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="sigma sqrt T">`;
+  s+=`<line class="ax" x1="60" x2="460" y1="120" y2="120"/>`;
+  for(let k=-3;k<=3;k++){ s+=`<line class="ax" x1="${X(k)}" x2="${X(k)}" y1="114" y2="126"/><text x="${X(k)}" y="145" text-anchor="middle" class="mut">${k===0?'S':(k>0?'+':'')+k+'σ√T'}</text>`;}
+  // bell
+  let p=''; for(let i=0;i<=120;i++){const z=-3+i/20; const y=120-90*Math.exp(-z*z/2); p+=(i?'L':'M')+X(z).toFixed(1)+' '+y.toFixed(1)+' ';} s+=`<path d="${p}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  s+=`<rect x="${X(0)}" y="30" width="${X(1)-X(0)}" height="90" fill="var(--accent)" opacity=".15"/>`;
+  s+=`<text x="${X(0.5)}" y="24" text-anchor="middle">σ√T = ${(iv*100).toFixed(1)}% × √(${h.toFixed(1)}/8760) = ${(ss*100).toFixed(2)}%</text>`;
+  s+=`<text x="${X(1)}" y="170" text-anchor="middle" class="mut">${lang==='kr'?'1σ 밖 strike':'1σ-out strike'} ≈ ${fmt(S*Math.exp(ss),2)} (spot ${fmt(S,2)})</text></svg>`;
+  return s;
+}
+function fig2(ch){ // payoff vs settlement with real m=1 call
+  const S=ch?ch.spot:100, ss=ch?ch.iv_atm*Math.sqrt(ch.hours/8760):0.02; const call=ch?ch.rows.filter(r=>r.kind==='call'&&r.ask>0).sort((a,b)=>Math.abs(a.m-1)-Math.abs(b.m-1))[0]:null;
+  const K=call?call.strike:S*Math.exp(ss), ask=call?call.ask:S*0.003;
+  const W=520,H=210,L=60,R=20; const x0=S*(1-3.2*ss),x1=S*(1+3.2*ss); const X=v=>L+(v-x0)/(x1-x0)*(W-L-R); const ymax=Math.max(S*3*ss-K+S,ask*4,1e-9); const Y=v=>150-Math.min(v,ymax)/ymax*110;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="payoff">`;
+  s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
+  s+=`<path d="M${X(x0)} ${Y(0)} L${X(K)} ${Y(0)} L${X(x1)} ${Y(x1-K)}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`;
+  s+=`<line x1="${X(K+ask)}" x2="${X(K+ask)}" y1="${Y(0)-8}" y2="${Y(0)+8}" stroke="var(--bad)" stroke-width="2"/>`;
+  s+=`<line x1="${X(S)}" x2="${X(S)}" y1="30" y2="${Y(0)+8}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  s+=`<text x="${X(S)}" y="${Y(0)+24}" text-anchor="middle" class="mut">S=${fmt(S,2)}</text><text x="${X(K)}" y="${Y(0)+40}" text-anchor="middle" class="mut">K=${fmt(K,2)} (m=${call?call.m.toFixed(2):'1.00'})</text>`;
+  s+=`<text x="${X(K+ask)}" y="22" text-anchor="middle" style="fill:var(--bad)">${lang==='kr'?'손익분기':'break-even'} K+ask=${fmt(K+ask,2)}</text>`;
+  s+=`<text x="${X(x1)-4}" y="${Y(x1-K)-6}" text-anchor="end">payoff = S_T − K</text>`;
+  s+=`<text x="${W/2}" y="${H-6}" text-anchor="middle" class="mut">ask=${fmt(ask,3)} → payback_ask = payoff/${fmt(ask,3)} ; ${lang==='kr'?'결제가가 K+ask 를 넘어야 이익':'profit only if S_T > K+ask'}</text></svg>`;
+  return s;
+}
+function fig3(){ // NAV waterfall from paper nav
+  const nav=(D.paper.nav||[]).filter(r=>r.strategy==='yield_calls').slice(-1)[0] || (D.paper.nav||[]).slice(-1)[0];
+  const parts = nav ? [['RWA accrual',nav.rwa_accrual],['− premium paid',-nav.premium_paid],['+ premium received',nav.premium_received],['+ settled payoff',(nav.option_pnl+nav.premium_paid-nav.premium_received)]] : [['RWA accrual',123],['− premium paid',-123],['+ premium received',0],['+ settled payoff',0]];
+  const W=520,H=210; const mx=Math.max(...parts.map(p=>Math.abs(p[1])),1); const bw=100; let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="NAV parts">`;
+  s+=`<line class="ax" x1="20" x2="${W-20}" y1="110" y2="110"/>`;
+  parts.forEach((p,i)=>{ const x=30+i*120; const h=Math.abs(p[1])/mx*80; const y=p[1]>=0?110-h:110; const col=p[1]>=0?'var(--ok)':'var(--bad)';
+    s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" fill="${col}" opacity=".75"/><text x="${x+bw/2}" y="${p[1]>=0?y-6:y+h+14}" text-anchor="middle" style="font-family:var(--mono)">${fmt(p[1],2)}</text><text x="${x+bw/2}" y="${H-12}" text-anchor="middle" class="mut">${p[0]}</text>`;});
+  s+=`<text x="${W/2}" y="18" text-anchor="middle">${nav?`${nav.strategy} · ${nav.date} · NAV ${fmt(nav.nav,2)} USD`:(lang==='kr'?'예시 값 (paper 자료 없음)':'example values (no paper data)')}</text></svg>`;
+  return s;
+}
+function fig4(){ // QUBO selection grid
+  const W=520,H=210; const nights=7, coins=['BTC','ETH','SOL']; const cw=56,chh=40; let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="QUBO grid">`;
+  let rng=17; const rnd=()=>{rng=(rng*9301+49297)%233280; return rng/233280;};
+  const cells=[]; for(let n=0;n<nights;n++) for(let c=0;c<coins.length;c++){ const e=(rnd()-0.6)*0.8 + (n===2||n===5?0.35:0); cells.push({n,c,e}); }
+  const top=cells.slice().sort((a,b)=>b.e-a.e).slice(0,7).map(c=>c.n+'-'+c.c);
+  cells.forEach(c=>{ const x=70+c.n*cw, y=50+c.c*chh; const sel=top.includes(c.n+'-'+c.c); const o=Math.max(0.08,Math.min(0.9,(c.e+0.5)));
+    s+=`<rect x="${x}" y="${y}" width="${cw-4}" height="${chh-4}" rx="4" fill="var(--accent-2)" opacity="${o.toFixed(2)}" stroke="${sel?'var(--bad)':'none'}" stroke-width="3"/><text x="${x+(cw-4)/2}" y="${y+chh/2+1}" text-anchor="middle" style="font-size:11px;fill:${o>0.5?'#fff':'var(--fg)'}">${c.e>=0?'+':''}${c.e.toFixed(2)}</text>`;});
+  coins.forEach((c,i)=>s+=`<text x="62" y="${50+i*chh+chh/2+1}" text-anchor="end" class="mut">${c}</text>`);
+  for(let n=0;n<nights;n++) s+=`<text x="${70+n*cw+(cw-4)/2}" y="40" text-anchor="middle" class="mut">${lang==='kr'?'밤':'night'} ${n+1}${(n===2||n===5)?'*':''}</text>`;
+  s+=`<text x="${W/2}" y="${H-14}" text-anchor="middle" class="mut">${lang==='kr'?'빨간 테두리 = 선택 (K=7) · * = event night · 숫자 = e_i (예시 값)':'red border = selected (K=7) · * = event night · numbers = e_i (illustrative)'}</text></svg>`;
+  return s;
+}
+// ---------- render
+function symTable(rows){ return table([{k:0,h:'symbol'},{k:1,h:lang==='kr'?'뜻':'meaning'},{k:2,h:lang==='kr'?'단위':'unit'},{k:3,h:lang==='kr'?'이 페이지 값':'value on this page'}], rows.map(r=>({0:r[0],1:r[1],2:r[2],3:r[3]}))); }
+function render(){
+  document.querySelectorAll('[data-t]').forEach(el=>el.innerHTML=t(el.dataset.t));
+  document.getElementById('btn-kr').setAttribute('aria-pressed',lang==='kr'); document.getElementById('btn-en').setAttribute('aria-pressed',lang==='en');
+  document.getElementById('gen').textContent=(D.generated_at||'').replace('T',' ').slice(0,16)+' UTC';
+  const st=D.status, last=st.last_snapshot||{}, uni=D.universe||[], pass=uni.filter(u=>u.universe_pass), chains=D.chains||{};
+  const sol=chains['SOL_USDC']||Object.values(chains)[0];
+  const navs=D.paper.nav||[]; const lastNav={}; navs.forEach(r=>lastNav[r.strategy]=r);
+  const tiles=[
+    [lang==='kr'?'Snapshot 수':'Snapshots', st.n_snapshots, (st.first_date||'')+' → '+(last.date||'')],
+    [lang==='kr'?'마지막 snapshot':'Last snapshot', last.ts_ms?new Date(last.ts_ms).toISOString().slice(11,16)+' UTC':'–', (last.n_depth||0)+' depth · '+(last.n_summary||0)+' summary'],
+    [lang==='kr'?'Universe 통과':'Universe pass', pass.length+'/'+uni.length, pass.map(u=>u.base).join(' · ')||'–'],
+    ['SOL_USDC ATM IV', sol?(sol.iv_atm*100).toFixed(1)+'%':'–', sol?sol.hours.toFixed(1)+'h to expiry · spot '+fmt(sol.spot,2):'–'],
+    ...Object.values(lastNav).map(r=>[r.strategy+' NAV', fmt(r.nav,0), r.date+' · P&L '+fmt(r.option_pnl,2)]),
+  ];
+  document.getElementById('tiles').innerHTML=tiles.map(x=>`<div class="tile"><div class="k">${x[0]}</div><div class="v">${x[1]}</div><div class="d">${x[2]}</div></div>`).join('');
+  // issues banner
+  const iss=[]; const solv=uni.find(u=>u.base==='SOL_USDC'); if(solv&&!solv.universe_pass) iss.push(lang==='kr'?`SOL_USDC 하루 option 거래량 ${fmt(solv.volume_krw_eok,1)}억 원 < 10억 원 기준. focus base 로 수집은 하지만 universe 미달.`:`SOL_USDC daily option volume KRW ${fmt(solv.volume_krw_eok,1)}×100M is below the KRW 1bn filter. Collected as focus base, fails universe.`);
+  if(st.n_snapshots<96) iss.push(lang==='kr'?`Snapshot ${st.n_snapshots}개: 하루치 (96) 미만. IV · 가격 시계열은 쌓이는 중.`:`${st.n_snapshots} snapshots: under one day (96). IV / price history still accumulating.`);
+  if(!navs.length) iss.push(lang==='kr'?'Paper book 비어 있음: 첫 dry-run 주문은 04:20 KST 에 나간다.':'Paper book empty: first dry-run orders at 04:20 KST.');
+  document.getElementById('issues').innerHTML=iss.length?`<div class="issue-box"><ul>${iss.map(i=>`<li>${i}</li>`).join('')}</ul></div>`:'';
+  // base selector
+  const sel=document.getElementById('sel-base'); const bases=Object.keys(D.index_history||{}); const cur=sel.value||'SOL_USDC';
+  sel.innerHTML=bases.map(b=>`<option ${b===cur?'selected':''}>${b}</option>`).join(''); sel.onchange=drawLive; drawLive();
+  document.getElementById('universe').innerHTML=table([{k:'base',h:'base'},{k:'volume_krw_eok',h:lang==='kr'?'24h 거래량 (억 원)':'24h volume (KRW 100M)',num:true,f:v=>fmt(v,1),cls:r=>r.universe_pass?'':'issue'},{k:'volume_usd',h:'USD',num:true,f:v=>fmt(v,0)},{k:'n_traded',h:lang==='kr'?'거래된 종목':'traded',num:true},{k:'n_listed',h:lang==='kr'?'상장 종목':'listed',num:true},{k:'universe_pass',h:'universe',f:v=>v?'<span class="pill ok">pass</span>':'<span class="pill bad">below</span>'}], uni);
+  // paper
+  lines('ch-nav', D.paper.nav_series||{}, 'lg-nav', {type:'price',precision:0,minMove:1});
+  const ss=document.getElementById('sel-strat'); const strats=Object.keys(D.periods||{}); ss.innerHTML=strats.length?strats.map(s=>`<option>${s}</option>`).join(''):'<option>–</option>';
+  const drawPeriods=()=>{ const p=(D.periods[ss.value]||{})[document.getElementById('sel-period').value]||[]; document.getElementById('periods').innerHTML=p.length?table([{k:'period',h:'period'},{k:'n_days',h:'days',num:true},{k:'ret',h:'return',num:true,f:v=>pct(v,2),cls:r=>r.ret<0?'issue':''},{k:'excess',h:'vs RWA',num:true,f:v=>pct(v,2)},{k:'max_dd',h:'MDD',num:true,f:v=>pct(v,2)},{k:'worst_day',h:'worst day',num:true,f:v=>pct(v,2)}],p):`<p class="cap">${lang==='kr'?'NAV 가 2일 이상 쌓이면 표시.':'Shown once NAV spans 2+ days.'}</p>`; };
+  ss.onchange=drawPeriods; document.getElementById('sel-period').onchange=drawPeriods; drawPeriods();
+  document.getElementById('orders').innerHTML=(D.paper.orders||[]).length?table([{k:'date',h:'date'},{k:'strategy',h:'strategy'},{k:'instrument_name',h:'instrument'},{k:'side',h:'side'},{k:'qty',h:'qty',num:true,f:v=>fmt(v,3)},{k:'fill_px',h:'fill (USD)',num:true,f:v=>fmt(v,4)},{k:'fill_usd',h:'USD',num:true,f:v=>fmt(v,2)},{k:'status',h:'status',cls:r=>r.status==='filled'?'':'issue'},{k:'note',h:'note'}],D.paper.orders.slice(0,30)):`<p class="cap">${lang==='kr'?'아직 주문 없음.':'No orders yet.'}</p>`;
+  // real
+  lines('ch-real', D.real.nav_series||{}, 'lg-real', {type:'price',precision:4,minMove:0.0001});
+  const sc=document.getElementById('sel-calib'); const coins=[...new Set((D.real.calibration||[]).map(r=>r.coin))]; sc.innerHTML=coins.map(c=>`<option>${c}</option>`).join('');
+  const drawCal=()=>{ document.getElementById('calib').innerHTML=svgCalib((D.real.calibration||[]).filter(r=>r.coin===sc.value&&r.kind==='call'&&r.m>=0&&r.m<=2.5)); }; sc.onchange=drawCal; drawCal();
+  document.getElementById('realtbl').innerHTML=table([{k:'coin',h:'coin'},{k:'idea',h:'idea'},{k:'params',h:'params'},{k:'nights',h:'nights',num:true},{k:'ann_return',h:'ann. return',num:true,f:v=>pct(v,1),cls:r=>r.excess_vs_rwa<0?'issue':''},{k:'excess_vs_rwa',h:'vs RWA',num:true,f:v=>pct(v,1)},{k:'max_drawdown',h:'MDD',num:true,f:v=>pct(v,2)},{k:'worst_night',h:'worst night',num:true,f:v=>pct(v,2)},{k:'payback_ask',h:'payback_ask',num:true,f:v=>fmt(v,2),cls:r=>(r.payback_ask!=null&&r.payback_ask<1)?'issue':''}], D.real.strategies||[]);
+  document.getElementById('sweep').innerHTML=table([{k:'scenario',h:'scenario'},{k:'idea',h:'idea'},{k:'params',h:'params'},{k:'ann_return',h:'ann. return',num:true,f:v=>pct(v,1),cls:r=>r.excess_vs_rwa<0?'issue':''},{k:'excess_vs_rwa',h:'vs RWA',num:true,f:v=>pct(v,1)},{k:'sharpe_vs_rwa',h:'Sharpe',num:true,f:v=>fmt(v,2)},{k:'max_drawdown',h:'MDD',num:true,f:v=>pct(v,1)},{k:'cvar5_night',h:'CVaR 5%',num:true,f:v=>pct(v,2)},{k:'seed_min_ret',h:'min over seeds',num:true,f:v=>pct(v,1)}], D.sweep||[]);
+  document.getElementById('perp').innerHTML=table([{k:'instrument',h:'instrument'},{k:'mean_ret',h:'mean / trade',num:true,f:v=>pct(v,1)},{k:'p_profit',h:'P(profit)',num:true,f:v=>pct(v,1)},{k:'p_lose_all',h:'P(lose all)',num:true,f:v=>pct(v,1),cls:r=>r.p_lose_all>0.3?'issue':''},{k:'liquidation_rate',h:'liquidation',num:true,f:v=>pct(v,1),cls:r=>r.liquidation_rate>0.3?'issue':''},{k:'cvar5',h:'CVaR 5%',num:true,f:v=>pct(v,1)}], D.perp||[]);
+  // formulas
+  const ss1=sol?sol.iv_atm*Math.sqrt(sol.hours/8760):null;
+  document.getElementById('sym1').innerHTML=symTable([['σ√T',g('σ√T'),lang==='kr'?'spot 비율':'fraction of spot',ss1?(ss1*100).toFixed(2)+'% (SOL_USDC)':'–'],['IV',g('IV'),'1/yr',sol?(sol.iv_atm*100).toFixed(1)+'% (ATM)':'–'],['h',lang==='kr'?'만기까지 남은 시간':'hours to expiry','h',sol?sol.hours.toFixed(2):'–'],['8760',lang==='kr'?'1년의 시간 수':'hours in a year','h','8760']]);
+  document.getElementById('fig1').innerHTML=fig1(sol);
+  const c1=sol?sol.rows.filter(r=>r.kind==='call'&&r.ask>0).sort((a,b)=>Math.abs(a.m-1)-Math.abs(b.m-1))[0]:null;
+  document.getElementById('sym2').innerHTML=symTable([['m',g('m'),'-',c1?c1.m.toFixed(2):'–'],['K',lang==='kr'?'strike':'strike','USD',c1?fmt(c1.strike,2):'–'],['S',lang==='kr'?'진입 시 spot (index)':'spot at entry','USD',sol?fmt(sol.spot,2):'–'],['S_T',g('delivery price'),'USD',lang==='kr'?'만기 뒤 확정':'known after expiry'],['ask',lang==='kr'?'best ask (매수 체결가)':'best ask (buy fill)','USD',c1?fmt(c1.ask,3):'–'],['payoff','max(S_T − K, 0)','USD',lang==='kr'?'만기 뒤':'after expiry'],['payback_ask',g('payback'),'-',lang==='kr'?'BTC 실데이터 0.59~0.69 (m=1)':'BTC real data 0.59-0.69 (m=1)']]);
+  document.getElementById('fig2').innerHTML=fig2(sol);
+  const n1=lastNav['yield_calls'];
+  document.getElementById('sym3').innerHTML=symTable([['NAV_0',lang==='kr'?'시작 자본':'starting capital','USD','1,000,000'],['r_rwa',lang==='kr'?'RWA 연 이자':'RWA yield','1/yr',pct(D.config.rwa_rate,1)],['t',lang==='kr'?'첫 주문 후 일수':'days since first order','d',n1?'1+':'–'],['premium_paid',lang==='kr'?'지불 프리미엄 누적':'cumulative premium paid','USD',n1?fmt(n1.premium_paid,2):'–'],['premium_received',lang==='kr'?'수취 프리미엄 누적':'cumulative premium received','USD',n1?fmt(n1.premium_received,2):'–'],['payoff_settled',lang==='kr'?'결제된 payoff 합 (매수 +, 매도 −)':'settled payoffs (long +, short −)','USD',n1?fmt(n1.option_pnl+n1.premium_paid-n1.premium_received,2):'–']]);
+  document.getElementById('fig3').innerHTML=fig3();
+  document.getElementById('sym4').innerHTML=symTable([['x_i',lang==='kr'?'후보 i 매수 여부':'buy candidate i','{0,1}',lang==='kr'?'주당 후보 ~ 7밤 × 3코인 × 4 strike':'~7 nights × 3 coins × 4 strikes per week'],['e_i',lang==='kr'?'기대 buy edge (payback − 1, 과거 보정)':'expected buy edge (payback − 1, calibrated on past)','per $','train window'],['v_i',lang==='kr'?'payback 분산 (edge 척도로 정규화)':'payback variance (scaled to edge)','per $','train window'],['λ',lang==='kr'?'분산 벌점 가중':'variance penalty','-','0 · 0.5'],['ρ',lang==='kr'?'같은 밤 중복 벌점':'same-night penalty','-','0.7'],['P',lang==='kr'?'예산 벌점 (soft)':'budget penalty (soft)','-',lang==='kr'?'자동 (|e| 최대의 2배)':'auto (2× max|e|)'],['K',lang==='kr'?'주당 단위 수':'units per week','count','7']]);
+  document.getElementById('fig4').innerHTML=fig4();
+  // business / data / glossary / notation
+  const biz = lang==='kr' ? [
+   `${dfn('payback')} 가 1 미만 (BTC 실데이터 m=1 콜 0.59~0.69) 이면 매일 콜을 사는 전략은 RWA 이자를 갉아먹는다. 매수는 이벤트 밤처럼 ${dfn('IV')} 가 싼 날에만 한다.`,
+   `반대로 ${dfn('IV')} 가 비싸면 프리미엄 매도 (${dfn('iron condor')}) 가 유리하다. 단, wing 없는 매도는 꼬리 손실이 무제한이라 RWA 담보 한도 안에서만 한다.`,
+   `${dfn('universe')} 필터 (하루 10억 원) 로 호가가 얇은 base 를 뺀다. 지금은 BTC · ETH · BTC_USDC 만 통과. SOL 은 참고 사례지만 미달이라 전략 자본을 넣지 않는다.`,
+   `${dfn('paper trading')} 으로 체결 가정 (ask 매수 · bid 매도) 이 실제 호가에서 성립하는지 매일 확인한다. 실자본 투입 판단은 paper 기간 수익 표를 본 뒤에 한다.`,
+  ] : [
+   `If ${dfn('payback')} is below 1 (BTC real data, m=1 calls: 0.59-0.69), buying calls daily erodes the RWA yield. Buy only on nights where ${dfn('IV')} is cheap (events).`,
+   `When ${dfn('IV')} is rich, selling premium (${dfn('iron condor')}) wins. Unwinged selling has unlimited tail loss, so it stays within the RWA collateral limit.`,
+   `The ${dfn('universe')} filter (KRW 1bn/day) removes thin books. Only BTC, ETH and BTC_USDC pass today. SOL is the reference case but fails, so no strategy capital goes there.`,
+   `${dfn('paper trading')} checks daily that the fill assumption (buy at ask, sell at bid) holds on real quotes. Real capital waits for the paper period-return table.`,
+  ];
+  document.getElementById('biz').innerHTML=biz.map(b=>`<li>${b}</li>`).join('');
+  const cnt=st.counts||{};
+  const dataRows=[
+   [lang==='kr'?'라이브 snapshot':'Live snapshots', `${st.n_snapshots} snapshots · ${cnt.book_summary||0} book rows · ${cnt.order_book||0} depth rows`, `${st.first_date||''} → ${last.date||''}`, lang==='kr'?'15분 간격, Mac 꺼져 있으면 결측':'15-min cadence; gaps when the Mac is off', 'Deribit public API → data/optiq.db'],
+   [lang==='kr'?'BTC 체결 이력 chain':'BTC trade-history chain', '201 nights · 1494 traded strikes', '2026-05-01 → 2026-11-18', lang==='kr'?'m 격자 밤 수 59~147 / 201 (얇은 strike 결측)':'59-147 of 201 nights per m bucket (thin strikes missing)', 'history.deribit.com → data/raw/btc_chain.parquet'],
+   [lang==='kr'?'SOL 체결 이력 chain':'SOL trade-history chain', '95 nights · 275 traded strikes', '2026-05-01 → 2026-11-17', lang==='kr'?'m 격자 밤 수 2~61 / 95 (매우 얇음)':'2-61 of 95 nights per m bucket (very thin)', 'history.deribit.com → data/raw/sol_chain.parquet'],
+   [lang==='kr'?'합성 sweep':'Synthetic sweep', '4 scenarios × 3 seeds × 900 nights (700 OOS)', '-', lang==='kr'?'결측 없음 (생성 데이터)':'none (generated)', 'results/sweep_summary.csv'],
+   [lang==='kr'?'결제가':'Delivery prices', `${cnt.delivery_price||0} rows`, lang==='kr'?'최근 10일 × 9 index':'last 10 days × 9 indices', '-', 'public/get_delivery_prices'],
+  ];
+  document.getElementById('datatbl').innerHTML=table([{k:0,h:lang==='kr'?'데이터':'dataset'},{k:1,h:'statistics'},{k:2,h:lang==='kr'?'기간':'period'},{k:3,h:lang==='kr'?'결측 · 한계':'missing / limits',cls:r=>/결측|missing|thin|얇/.test(r[3])&&!/없음|none/.test(r[3])?'issue':''},{k:4,h:lang==='kr'?'출처':'source'}], dataRows.map(r=>({0:r[0],1:r[1],2:r[2],3:r[3],4:r[4]})));
+  document.getElementById('gloss').innerHTML=table([{k:0,h:lang==='kr'?'용어':'term'},{k:1,h:lang==='kr'?'뜻':'meaning'}], Object.keys(G).map(k=>({0:k,1:g(k)})));
+  document.getElementById('notation').innerHTML=table([{k:0,h:'symbol'},{k:1,h:lang==='kr'?'정의':'definition'},{k:2,h:lang==='kr'?'단위':'unit'}], N.map(r=>({0:r[0],1:r[1],2:r[2]})));
+  const done = lang==='kr' ? ['v0.1: 5 아이디어 구현, 합성 데이터 sweep, 테스트 4개','SQLite 저장 계층 + 15분 launchd snapshot (9 base, depth 5)','Universe 거래량 필터 (10억 원/일)','dry-run paper 엔진 (yield_calls · short_condor), 결제 · NAV','BTC · SOL 체결 이력 chain backtest (Idea 1 · 3 · 4)','기간별 수익 모듈, 이 대시보드 (로컬 + 정적 export)'] : ['v0.1: five ideas, synthetic sweep, 4 tests','SQLite store + 15-min launchd snapshots (9 bases, depth 5)','Universe volume filter (KRW 1bn/day)','Dry-run paper engine (yield_calls · short_condor), settlement, NAV','BTC / SOL trade-history backtest (ideas 1, 3, 4)','Period-return module, this dashboard (local + static export)'];
+  const wip = lang==='kr' ? ['첫 paper 주문 (04:20 KST) 과 첫 결제 (17:30 KST) 대기','이벤트 캘린더 (FOMC · CPI · 토큰 언락) 실제 날짜 반영','국면 판별 (지금 시장이 rich_iv 인가 fair_iv 인가) 모형','QUBO SA 튠 + MILP 정확해 비교','Deribit 과거 호가 없음 → 라이브 snapshot 으로 실제 bid/ask 이력 축적 중'] : ['First paper orders (04:20 KST) and first settlement (17:30 KST) pending','Real event calendar (FOMC, CPI, token unlocks)','Regime classifier (is today rich_iv or fair_iv?)','QUBO SA tuning + exact MILP comparison','No historical order books on Deribit → building real bid/ask history from live snapshots'];
+  document.getElementById('done').innerHTML=done.map(x=>`<li>${x}</li>`).join(''); document.getElementById('wip').innerHTML=wip.map(x=>`<li>${x}</li>`).join('');
+  const lims = lang==='kr' ? ['실데이터 backtest 의 호가는 체결 VWAP + 모델 spread 라서 실제 체결 가능 가격이 아니다.','SOL 과거 chain 은 strike 당 밤 수가 2~61 로 매우 얇다. SOL 수치는 참고만.','합성 sweep 결과는 시나리오 가정에 따라 바뀐다. 지금 시장이 어느 시나리오인지 아직 판별하지 않았다.','paper NAV 는 열린 포지션을 0 으로 평가한다. 매도 전략은 결제 전까지 과대평가된다.','QUBO SA 가 greedy 보다 못하다 (sweep 표).','API key 는 trade 권한이 있다. 코드는 private endpoint 를 호출하지 않지만 read-only key 로 바꾸는 것이 안전하다.','Snapshot 은 Mac 이 켜져 있을 때만 쌓인다.'] : ['Real-data backtest quotes are trade VWAP + modelled spread, not executable prices.','SOL history is very thin (2-61 nights per strike bucket). SOL numbers are indicative only.','Synthetic sweep results depend on scenario assumptions. The current regime is not yet classified.','Paper NAV carries open positions at zero: short strategies are overstated until settlement.','QUBO SA underperforms greedy (sweep table).','The API key has trade scope. The code never calls private endpoints, but a read-only key is safer.','Snapshots accumulate only while the Mac is on.'];
+  document.getElementById('lims').innerHTML=lims.map(x=>`<li>${x}</li>`).join('');
+  const links=[['GitHub · limpst/optiq-rwa','https://github.com/limpst/optiq-rwa'],['README (v0.1 결과 · 로드맵)','https://github.com/limpst/optiq-rwa/blob/main/README.md'],['results/SUMMARY.md (합성 sweep)','https://github.com/limpst/optiq-rwa/blob/main/results/SUMMARY.md'],['results/real/SUMMARY_REAL.md (실데이터)','https://github.com/limpst/optiq-rwa/blob/main/results/real/SUMMARY_REAL.md'],['data/optiq.db (SQLite, 매일 commit)','https://github.com/limpst/optiq-rwa/tree/main/data'],['Deribit API docs','https://docs.deribit.com/'],['참고 사례 · SOL daily call (LinkedIn, P. Lachowicz)','https://lnkd.in/p/gN5Us43k']];
+  document.getElementById('links').innerHTML=links.map(l=>`<li><a href="${l[1]}" target="_blank" rel="noopener">${l[0]}</a></li>`).join('');
+  bindTips();
+}
+function drawLive(){
+  const b=document.getElementById('sel-base').value||'SOL_USDC';
+  const ih=D.index_history[b]||[]; const iv=(D.iv_history||{})[b]||[];
+  lines('ch-index',{[b+' index']:ih},null,{type:'price',precision:b.startsWith('BTC')?0:2,minMove:0.01});
+  lines('ch-iv',{[b+' ATM IV %']:iv},null,{type:'price',precision:1,minMove:0.1});
+  const ch=D.chains[b]; document.getElementById('smile').innerHTML=svgSmile(ch);
+  document.getElementById('base-info').textContent=ch?`${ch.hours.toFixed(1)}h · spot ${fmt(ch.spot,2)} · ${ch.rows.length} strikes`:'';
+}
+// tooltips (one at a time)
+const tip=document.getElementById('tip');
+function bindTips(){ document.querySelectorAll('dfn[data-g]').forEach(el=>{ el.onmouseenter=e=>{ tip.textContent=g(el.dataset.g)||el.dataset.g; tip.hidden=false; place(e); }; el.onmousemove=place; el.onmouseleave=()=>tip.hidden=true; el.onfocus=el.onmouseenter; el.onblur=el.onmouseleave; el.tabIndex=0; }); }
+function place(e){ const x=Math.min(e.clientX+12, innerWidth-330), y=e.clientY+16; tip.style.left=x+'px'; tip.style.top=(y+120>innerHeight?e.clientY-tip.offsetHeight-10:y)+'px'; }
+// wrap glossary terms in static copy once
+function autoDfn(){ document.querySelectorAll('h2,h3,p.cap,[data-t^="p_"]').forEach(el=>{ let h=el.innerHTML; for(const k of ['σ√T','QUBO','0DTE','RWA','IV','payback','ITM','NAV','MDD','Sharpe','iron condor','strangle','VWAP','universe','snapshot','paper','launchd','SQLite','perp']){ const re=new RegExp(`(?<![\\w<"'-])${k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![\\w>"'-])`); if(re.test(h)&&!h.includes(`data-g="${k}"`)) h=h.replace(re,`<dfn data-g="${k==='paper'?'paper trading':k}">${k}</dfn>`);} el.innerHTML=h; }); bindTips(); }
+if (D===null) { fetch('/api/all').then(r=>r.json()).then(j=>{ D=j; render(); autoDfn(); }); } else { render(); autoDfn(); }
+</script>
