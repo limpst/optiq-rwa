@@ -108,7 +108,7 @@ for f in sorted(pathlib.Path(a.raw).glob("*_chain.parquet")):
                 nav_all.append(nights_to_dates(nav.dropna(), dates).rename(f"{coin}|{cm_name}|short m={m} wing={wing} frac={frac} skip_ev={skip}"))
     res = pd.DataFrame(rows)
     if not res.empty:
-        res = add_dsr(res, group_cols=("coin", "cost_model"))
+        res = add_dsr(res, group_cols=("coin", "cost_model", "idea"))   # trials = configs of the same idea
         res["highlight"] = res.apply(highlight, axis=1)
         res.to_csv(out / f"strategies_{coin}.csv", index=False)
         for cmn in ("none", "base", "stress"):

@@ -81,5 +81,5 @@ def run(seeds=(0, 1, 2), n_nights=600, warmup=200, quick=False, log=print, cost_
                 rows.append({"scenario": sname, "seed": seed, "idea": idea, "params": str(params), "cost_model": cm_name,
                              **nav_metrics(nav), **info})
                 curves[(sname, seed, idea, str(params), cm_name)] = nav
-        log(f"{sname:20s} seed={seed}  {time.time() - t:5.1f}s")
+        log(f"{sname:20s} seed={seed}  {time.time() - t:5.1f}s", flush=True) if log is print else log(f"{sname:20s} seed={seed}  {time.time() - t:5.1f}s")
     return pd.DataFrame(rows), pd.concat(calib), pd.concat(perp), curves

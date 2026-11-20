@@ -20,7 +20,7 @@
 
 ## 요약
 
-- 결론: base TC 를 넣으면 BTC 실데이터에서 하이라이트 규칙을 통과하는 전략은 **없다**. 가장 좋은 strangle 매도 (m=1.5, frac 0.5) 의 최종 NAV 는 TC 없음 1.0130 → base 1.0106 → stress 0.9954 다. 0DTE OTM option 은 가격이 싸서 수수료 12.5% 상한이 걸리고, 프리미엄 1달러당 0.05~0.08 달러가 수수료다.
+- 결론: base TC 를 넣으면 BTC 실데이터에서 하이라이트 규칙을 통과하는 전략은 **없다**. 합성 sweep 에서는 588 설정 중 8개 (events_underpriced 의 Idea 2 QUBO 선택) 만 통과하고, rich_iv 매도는 꼬리 (skew −5) 때문에 DSR 에서 떨어진다. 가장 좋은 strangle 매도 (m=1.5, frac 0.5) 의 최종 NAV 는 TC 없음 1.0130 → base 1.0106 → stress 0.9954 다. 0DTE OTM option 은 가격이 싸서 수수료 12.5% 상한이 걸리고, 프리미엄 1달러당 0.05~0.08 달러가 수수료다.
 - 정정: QUBO SA 가 greedy 보다 못하던 것은 soft 예산 벌점이 너무 커서 SA 가 빈 해에 갇힌 구현 문제였다. 고친 뒤 SA = MILP (gap 0.00%). v0.1 의 "SA < greedy" 는 철회한다.
 - 열린 항목: 국면 라벨 (rich_iv) 이 매도 우위를 골라내지 못한다 (BTC regime_follow IR −0.05 vs always_short 1.63). 라벨은 아직 신호가 아니다. 실제 호가 이력은 라이브 snapshot 으로 쌓는 중이다.
 
@@ -31,7 +31,7 @@
 | 실데이터 | Deribit 체결 VWAP chain, BTC 201밤 · SOL 95밤 (2026-05-01 ~ 11-18) |
 | cost model | none · base (fee 0.03%/12.5% cap, 데일리 결제 수수료 면제) · stress (spread 2배, slippage +50%, 결제 수수료 0.015%) |
 | 수수료 출처 | 2차 자료 (jeangalea.com, coincodecap). support.deribit.com 요율표는 직접 확인 못 함 |
-| DSR N | 실데이터: 코인 × cost model 안의 설정 수 (21). sweep: 시나리오 × cost model × seed 안의 설정 수 |
+| DSR N | 같은 아이디어의 파라미터 설정 수 (실데이터: 코인 × cost model × 아이디어, sweep: 시나리오 × cost model × seed × 아이디어) |
 | 라벨 | `risk/regime.py` nearest-centroid, walk-forward 특징, 참조 = 합성 4 시나리오 |
 
 ## 결과
@@ -77,9 +77,24 @@
 | 새 SA (P2 = 0.1×scale, 500×4, repair + polish) | 0.00% | 0.1 s |
 | MILP (scipy) | 0 | 25 ms |
 
-### 합성 sweep (TC 3종 · DSR)
+### 합성 sweep (TC 3종 · DSR, 4 시나리오 × 3 seed × 700 표본 외 밤)
 
-- 실행 중. 끝나면 `results/SUMMARY.md` 의 하이라이트 표를 여기에 옮긴다.
+하이라이트 통과: **8 / 576** (시나리오 × cost model × 설정). 전부 events_underpriced 시나리오의 Idea 2 (QUBO 이벤트 선택) 이고, stress TC 에서는 하나도 남지 않는다.
+
+| 시나리오 | TC | 아이디어 | 설정 | 연 수익 | IR | MDD | DSR | DSR (seed 최소) |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| events_underpriced | base | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0} | 7.3% | 1.12 | -0.05% | 0.990 | 0.973 |
+| events_underpriced | base | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0} | 6.4% | 1.16 | -0.05% | 0.983 | 0.974 |
+| events_underpriced | base | 2_qubo_event_selector | {'solver': 'milp', 'lam': 0.5, 'budget_mult': 1.0} | 5.8% | 1.09 | -0.05% | 0.958 | 0.937 |
+| events_underpriced | base | 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0} | 5.7% | 1.05 | -0.05% | 0.950 | 0.916 |
+| events_underpriced | none | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.0, 'budget_mult': 1.0} | 7.9% | 1.22 | -0.05% | 0.997 | 0.992 |
+| events_underpriced | none | 2_qubo_event_selector | {'solver': 'greedy', 'lam': 0.5, 'budget_mult': 1.0} | 6.9% | 1.34 | -0.05% | 0.998 | 0.995 |
+| events_underpriced | none | 2_qubo_event_selector | {'solver': 'milp', 'lam': 0.5, 'budget_mult': 1.0} | 6.0% | 1.25 | -0.05% | 0.986 | 0.979 |
+| events_underpriced | none | 2_qubo_event_selector | {'solver': 'sa', 'lam': 0.5, 'budget_mult': 1.0} | 6.0% | 1.21 | -0.05% | 0.981 | 0.964 |
+
+- rich_iv 의 프리미엄 매도 (`{'m': 1.0, 'frac': 1.0, 'skip_events': False, 'wing_m': None}`) 는 base TC 에서 연 29.0% · IR 1.39 · MDD -14.8% 이지만 **DSR 0.000** 으로 탈락한다. 밤 수익의 skew 가 약 −5, kurtosis 약 40 이라 DSR 의 비정규성 보정이 Sharpe 를 크게 깎는다. 매도 전략의 "높은 Sharpe" 는 꼬리를 대가로 산 것이라는 뜻이다. (TC 없음: 연 53.4%, DSR 0.029.)
+- DSR 의 trials N 은 같은 아이디어의 파라미터 설정 수로 잡았다 (아이디어를 섞으면 V[SR] 이 부풀어 모두 0 이 된다). 이 선택이 결과를 좌우하므로 표에 seed 최소 DSR 도 같이 둔다.
+- 실데이터 (BTC) 에서는 같은 규칙으로 통과 0 개. 41밤 m=2.0 매도도 같은 아이디어 안에서 보정하면 DSR 0.02 다.
 
 ## 정정 · 철회
 
