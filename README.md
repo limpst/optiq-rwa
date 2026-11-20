@@ -6,6 +6,19 @@
 
 > 상태: 🧪 v0.2 — 라이브 Deribit 수집 (SQLite · 15분 launchd) · dry-run paper 엔진 · 실데이터 backtest · 대시보드. 실주문 없음.
 
+## 링크 (2026-11-20)
+
+| 무엇 | 어디 |
+|---|---|
+| 대시보드 artifact (claude.ai, 비공개 링크) | https://claude.ai/artifact/QbAXfoRRHvuhBF4nSW5Vd7 |
+| 로컬 대시보드 | http://127.0.0.1:8793 (`PYTHONPATH=src uvicorn optiq_rwa.dashboard.app:app --port 8793`) |
+| 정적 대시보드 (GitHub Pages 를 docs/ 로 켜면 공개) | `docs/index.html` |
+| 보고서 v0.2 (라이브 수집 · paper · 실데이터) | `docs/REPORT_v0.2.md` · [Notion](https://app.notion.com/p/41e6585be6ea81d3b1b9c648d0ef4632) |
+| 보고서 v0.3 (TC · SR/IR/MDD/DSR · 국면 검증) | `docs/REPORT_v0.3_risk_tc.md` · [Notion](https://app.notion.com/p/41e6585be6ea810fb0d0dfde5e0f0181) |
+| 결과 | `results/SUMMARY.md` (합성 sweep) · `results/real/SUMMARY_REAL.md` (실데이터) · `results/regime_validation.md` · `results/qubo_bench.md` |
+| Deribit 수수료 (공식) | https://support.deribit.com/hc/en-us/articles/25944746248989-Fees |
+| 참고 사례 | [SOL daily call, LinkedIn](https://lnkd.in/p/gN5Us43k) |
+
 ---
 
 ## v0.2 — 라이브 데이터 · paper trading · 대시보드 (2026-11-20)
