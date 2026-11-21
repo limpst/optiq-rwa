@@ -26,7 +26,7 @@
 |---|---|---|
 | 라이브 수집 · paper NAV(게이트 전/후) · 현재 국면 · OOS walk-forward(전체 + 최근 30밤 DSR) | [`status` 브랜치](https://github.com/limpst/optiq-rwa/blob/status/README.md) | 매시간 (커밋 1개를 force-push, main 기록 무변경) |
 | 같은 내용의 일별 스냅샷 | [`docs/status.md`](docs/status.md) | 매일 17:30 KST settle 때 DB 와 함께 main 커밋 |
-| 실패 알림 | macOS 알림 + `data/logs/alerts.log`, `.env` 의 `OPTIQ_ALERT_WEBHOOK` 이 있으면 Teams / Slack 으로 전송 | 단계 실패 즉시 |
+| 실패 · 정지 알림 | macOS 알림 + `data/logs/alerts.log`, `.env` 의 `OPTIQ_ALERT_WEBHOOK` 이 있으면 Teams / Slack 으로 전송 | 단계 실패 즉시 · 수집 45분 정지 시 1회 |
 
 ---
 
@@ -46,9 +46,9 @@
 | `scripts/run_real_backtest.py` | `data/raw/*_chain.parquet` (Deribit 체결 이력) 로 Idea 1 · 3 · 4 backtest → `results/real/` |
 | `scripts/launchd/` | `com.optiq.snapshot` (900초) · `com.optiq.readme` (3600초, `daily.sh status` → `status` 브랜치) · `com.optiq.trade` (04:20 KST) · `com.optiq.settle` (17:30 KST, 결제 · NAV · export · 라이브 체인 · OOS walk-forward 재계산 · `docs/status.md` · DB commit) |
 | `scripts/update_status.py` | `docs/status.md` 생성: 라이브 수집 현황 · paper NAV · 실행 게이트 전/후 비교 · 현재 국면 · OOS walk-forward 지표(전체 + 최근 30밤, 최근 구간 DSR 별도) |
-| `src/optiq_rwa/paper/gate.py` | 아이디어 8 실행 게이트: 기대 결제가치(아이디어 4 보정 payback × 라이브 mid) − ask/bid − 수수료 > 0 인 패키지만 진입. paper 엔진에 `*_gated` 쌍둥이 전략으로 적용, 보류는 `status='gated'` 로 기록 |
-| `src/optiq_rwa/data/livechain.py` | 라이브 호가(19:20 UTC snapshot, 실제 best bid/ask)로 매일 밤 체인 생성 → `data/live/`. walk-forward 스크립트는 과거 체결 체인 + 라이브 밤을 이어 붙여 표본 외 구간을 매일 늘림 |
-| `scripts/notify.sh` | 스케줄 단계 실패 알림 (macOS 알림 · `alerts.log` · 선택: Teams / Slack webhook) |
+| `src/optiq_rwa/paper/gate.py` | 아이디어 8 실행 게이트: 기대 결제가치(아이디어 4 보정 payback × 라이브 mid) − ask/bid − 수수료 > 0 인 패키지만 진입. payback 은 점추정이 아니라 단측 하한(매수 payback − z·se, 매도 + z·se, z = `OPTIQ_GATE_Z` 기본 1.645)이고, 라이브 호가 밤이 쌓일수록 n_live / (n_live + 60) 가중으로 라이브 추정치 쪽으로 재보정. paper 엔진에 `*_gated` 쌍둥이 전략으로 적용, 보류는 `status='gated'` 로 기록 |
+| `src/optiq_rwa/data/livechain.py` | 라이브 호가(19:20 UTC snapshot, 실제 best bid/ask)로 매일 밤 체인 생성(BTC · ETH · SOL, ETH 는 라이브 전용) → `data/live/`. walk-forward 스크립트는 과거 체결 체인 + 라이브 밤을 이어 붙여 표본 외 구간을 매일 늘림 |
+| `scripts/notify.sh` | 스케줄 단계 실패 알림 (macOS 알림 · `alerts.log` · 선택: Teams / Slack webhook). 매시간 작업은 마지막 snapshot 이 45분 넘게 없으면 수집 정지로 보고 정지 1회당 한 번 알림 |
 
 ### Universe 필터 (하루 option 거래량 10억 원 이상, 2026-11-20 24h)
 
