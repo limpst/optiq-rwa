@@ -9,6 +9,6 @@ con = sqlite3.connect(SETTINGS.db_path); con.execute("PRAGMA wal_checkpoint(TRUN
 PYEOF
 SZ=$(stat -f%z data/optiq.db)
 if [ "$SZ" -gt 94371840 ]; then echo "DB ${SZ}B > 90MB: not committing; switch to parquet-only publishing"; exit 3; fi
-git add data/optiq.db data/parquet results docs 2>/dev/null
+git add data/optiq.db data/parquet results docs README.md 2>/dev/null
 if git diff --cached --quiet; then echo "nothing to publish"; exit 0; fi
-git commit -q -m "data: snapshot $(date -u +%Y-%m-%dT%H:%MZ) (db ${SZ}B)" && git push -q origin main && echo "pushed $(git rev-parse --short HEAD)"
+git commit -q -m "data: snapshot $(date -u +%Y-%m-%dT%H:%MZ) (db ${SZ}B)" && git pull -q --rebase --autostash origin main && git push -q origin main && echo "pushed $(git rev-parse --short HEAD)"
