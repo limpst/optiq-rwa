@@ -71,3 +71,31 @@ def test_load_payback_from_repo_results():
     assert {"*", "BTC"} <= set(t.coin) and t.payback.between(0, 50).all()
     assert gate.expected_payback(t, "BTC", "call", 1.1, False) is not None
     assert gate.expected_payback(t, "ETH", "call", 1.0, False) is not None             # ETH falls back to the pooled table
+
+
+def test_lower_bound_blocks_thin_edge(con):
+    plan, _ = _plan(con)                                   # 105C: mid 1.0, ask 1.1
+    t = _table(1.2).assign(se=0.0)
+    kept, _ = gate.apply([dict(o) for o in plan], t, event=False)
+    assert len(kept) == 1                                  # point estimate 1.2 x mid clears ask + fee
+    kept, blocked = gate.apply([dict(o) for o in plan], t.assign(se=0.1), event=False)
+    assert not kept and len(blocked) == 1                  # 1.2 - 1.645 x 0.1 = 1.04 < ask
+    kept, _ = gate.apply([dict(o) for o in plan], t.assign(se=0.1), event=False, z=0.0)
+    assert len(kept) == 1                                  # z = 0 -> point estimate again
+
+
+def test_live_nights_pull_payback(tmp_path):
+    (tmp_path / "cal").mkdir(); (tmp_path / "live").mkdir()
+    pd.DataFrame([dict(coin="SOL", kind="call", m=1.0, event=False, n=100, payback_mid=0.5, p_itm_emp=0.2)]).to_csv(
+        tmp_path / "cal" / "calibration_SOL.csv", index=False)
+    no_live = gate.load_payback(tmp_path / "cal", live_dir=tmp_path / "live")
+    hist = no_live[no_live.coin == "SOL"].iloc[0]
+    assert np.isclose(hist.payback, 0.5) and hist.n_live == 0 and hist.se > 0
+    n = 60                                                 # live nights: half end ITM paying 4 x mid -> payback 2.0
+    live = pd.DataFrame(dict(night=range(n), date=pd.date_range("2026-11-01", periods=n).date, coin="SOL", kind="call",
+                             m=1.0, k_rel=1.02, iv=0.6, iv_atm=0.6, mid=0.01, bid=0.009, ask=0.011, settle_rel=1.0,
+                             payoff=[0.04 if i % 2 else 0.0 for i in range(n)], event=False, quote_source="live_book"))
+    live.to_parquet(tmp_path / "live" / "sol_live_chain.parquet")
+    t = gate.load_payback(tmp_path / "cal", live_dir=tmp_path / "live")
+    r = t[t.coin == "SOL"].iloc[0]
+    assert r.n_live == n and np.isclose(r.payback, 0.5 * 0.5 + 0.5 * 2.0)   # w_live = 60 / (60 + 60)
