@@ -23,7 +23,7 @@ from . import store
 from .live import index_name_of, live_chain
 
 RAW_DIR, LIVE_DIR = ROOT / "data" / "raw", ROOT / "data" / "live"
-BASE_OF = {"BTC": "BTC", "SOL": "SOL_USDC"}      # coin label used by the raw chains -> live base
+BASE_OF = {"BTC": "BTC", "ETH": "ETH", "SOL": "SOL_USDC"}   # coin label (raw chains) -> live base; ETH is live-only
 COLS = ["night", "date", "coin", "kind", "m", "k_rel", "iv", "iv_atm", "mid", "bid", "ask", "settle_rel", "payoff",
         "event", "quote_source"]
 
