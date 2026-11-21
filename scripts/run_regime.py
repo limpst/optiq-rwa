@@ -10,6 +10,7 @@ import pathlib
 import pandas as pd
 
 from optiq_rwa.data import store
+from optiq_rwa.data.livechain import available_coins, load_chain
 from optiq_rwa.risk import regime
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -26,8 +27,10 @@ def month_table(h: pd.DataFrame) -> pd.DataFrame:
 def main():
     clf = regime.RegimeClassifier()
     parts = []
-    for coin in ("btc", "sol"):
-        chain = pd.read_parquet(RAW / f"{coin}_chain.parquet")
+    for coin in available_coins():                       # raw history + live order-book nights
+        chain = load_chain(coin)
+        if chain.empty:
+            continue
         h = regime.classify_history(chain, clf)
         dates = chain.groupby("night").date.first()
         h["date"] = h.night.map(dates).astype(str)
