@@ -31,7 +31,13 @@ def main():
         chain = load_chain(coin)
         if chain.empty:
             continue
-        h = regime.classify_history(chain, clf)
+        try:
+            h = regime.classify_history(chain, clf)
+        except Exception as e:                           # e.g. a live-only coin with too few nights yet
+            print(f"{coin}: regime history skipped ({e})")
+            continue
+        if h.empty:
+            continue
         dates = chain.groupby("night").date.first()
         h["date"] = h.night.map(dates).astype(str)
         parts.append(h)
