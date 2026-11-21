@@ -3,6 +3,8 @@
 Per (coin, night): long overlay = m~+1 call bought at ask_c (payback-1 per $ premium);
 short overlay = m~+/-1.5 strangle sold at bid_c, payoff_short_c owed (P&L per $ spot notional per leg).
 Labels from results/regime_history.csv (features use nights < n only). Cost model = base.
+Chains = data/raw history + live order-book nights appended daily (optiq_rwa.data.livechain), so the
+out-of-sample window grows by one tradable-quote night per settled day.
 Outputs results/regime_validation.csv / .md: per-label statistics and four NAV paths
 (rwa_only, always_long_daily, always_short, regime_follow) with SR / IR / MDD / DSR.
 
@@ -18,6 +20,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 from optiq_rwa.backtest.costs import BASE, with_costs           # noqa: E402
 from optiq_rwa.backtest.metrics import nav_metrics, add_dsr, highlight  # noqa: E402
 from optiq_rwa.data.events import event_dates                   # noqa: E402
+from optiq_rwa.data.livechain import available_coins, load_chain  # noqa: E402
 
 RWA, TOL, FRAC, BM = 0.045, 0.35, 0.5, 3.0
 out = pathlib.Path("results"); lab = pd.read_csv(out / "regime_history.csv", parse_dates=["date"])
@@ -36,8 +39,10 @@ def nearest(g, kind, m):
 rows, navs_all, md = [], {}, ["# Regime validation (real chains, base TC)\n",
                              "Long overlay = m≈+1 call at ask (incl. fee), return per $ premium = payback − 1. Short overlay = m≈±1.5 strangle at bid (incl. fee), P&L per $ notional per leg. "
                              "Labels are walk-forward (features use earlier nights only). regime_follow: rich_iv → sell strangle (frac 0.5), else buy calls with 3× accrual on event nights only.\n"]
-for f in sorted(pathlib.Path("data/raw").glob("*_chain.parquet")):
-    raw = pd.read_parquet(f); coin = raw.coin.iloc[0]
+for coin in available_coins():           # raw history + live order-book nights (data.livechain)
+    raw = load_chain(coin)
+    if raw.empty:
+        continue
     raw = raw[np.isfinite(raw.m) & (raw.iv > 0)].copy()
     raw["m_cont"] = np.log(raw.k_rel) / (raw.iv_atm * np.sqrt(12.7 / 8760))
     raw["m"] = (raw.m_cont * 2).round() / 2
