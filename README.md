@@ -20,48 +20,13 @@
 | 참고 사례 | [SOL daily call, LinkedIn](https://lnkd.in/p/gN5Us43k) |
 
 
-<!-- AUTO:STATUS:START -->
-## 실시간 현황 (자동 갱신: 2026-11-21 14:22 KST)
+## 실시간 현황
 
-> 이 섹션은 `scripts/update_readme.py` 가 매시간(launchd `com.optiq.readme`)과 매일 settle(17:30 KST) 때 다시 씁니다. 손으로 고치지 마세요.
-
-### 라이브 수집 (Deribit 공개 API, 15분 주기)
-
-| 항목 | 값 |
-|---|---|
-| snapshot 수 (전체 / 최근 24h) | 12 / 12 |
-| 기간 (KST) | 2026-11-20 14:24 → 2026-11-20 17:30 |
-| index BTC | 61,942.15 USD |
-| index ETH | 1,755.15 USD |
-| universe 통과 (2026-11-20) | BTC, ETH, BTC_USDC |
-
-### Paper trading (실시간 표본 외, dry-run)
-
-결제된 NAV 기록 없음 (주문 0건). 첫 settle(17:30 KST) 이후 채워집니다.
-
-### 현재 국면 (walk-forward 라벨, 과거 밤만 사용)
-
-| 코인 | 기준일 | 라벨 | IV/RV | 행동 |
-|---|---|---|---|---|
-| SOL | 2026-11-17 | rich_iv | 1.53 | sell premium (idea 3, with wings) |
-| BTC | 2026-11-18 | rich_iv | 1.32 | sell premium (idea 3, with wings) |
-
-### OOS walk-forward (실데이터 체인, base TC)
-
-국면 라벨은 그날 이전 밤의 특징만으로 정하고(look-ahead 없음), 모든 전략을 같은 표본 외 구간에서 평가합니다. 굵게 = highlight 규칙 통과. 상세: `results/regime_validation.md`.
-
-| 코인 | 전략 | 밤 | 연수익 | RWA 대비 | SR | IR | MDD | DSR | 최근 30밤 연수익 | 최근 30밤 MDD |
-|---|---|---|---|---|---|---|---|---|---|---|
-| BTC | rwa_only | 202 | +4.6% | +0.1% | – | – | 0.00% | – | +4.5% | 0.00% |
-| BTC | always_long_daily | 202 | +3.1% | -1.4% | 8.17 | -3.78 | 0.00% | 0.00 | +1.2% | 0.00% |
-| BTC | always_short | 202 | +5.5% | +1.0% | 10.00 | 1.63 | -0.25% | 0.24 | +0.9% | -0.25% |
-| BTC | regime_follow | 202 | +4.6% | +0.1% | 8.37 | -0.05 | -0.25% | 0.01 | +0.9% | -0.25% |
-| SOL | rwa_only | 105 | +4.6% | +0.1% | – | – | 0.00% | – | +4.5% | 0.00% |
-| SOL | always_long_daily | 105 | +3.9% | -0.6% | 16.73 | -2.96 | 0.00% | 0.00 | +4.0% | 0.00% |
-| SOL | always_short | 105 | +5.5% | +1.0% | 25.82 | 4.06 | 0.00% | 0.51 | +6.2% | 0.00% |
-| SOL | regime_follow | 105 | +5.3% | +0.8% | 23.75 | 3.24 | -0.02% | 0.28 | +6.2% | 0.00% |
-
-<!-- AUTO:STATUS:END -->
+| 무엇 | 어디 | 갱신 |
+|---|---|---|
+| 라이브 수집 · paper NAV(게이트 전/후) · 현재 국면 · OOS walk-forward(전체 + 최근 30밤 DSR) | [`status` 브랜치](https://github.com/limpst/optiq-rwa/blob/status/README.md) | 매시간 (커밋 1개를 force-push, main 기록 무변경) |
+| 같은 내용의 일별 스냅샷 | [`docs/status.md`](docs/status.md) | 매일 17:30 KST settle 때 DB 와 함께 main 커밋 |
+| 실패 알림 | macOS 알림 + `data/logs/alerts.log`, `.env` 의 `OPTIQ_ALERT_WEBHOOK` 이 있으면 Teams / Slack 으로 전송 | 단계 실패 즉시 |
 
 ---
 
@@ -79,8 +44,11 @@
 | `src/optiq_rwa/backtest/periods.py` | 일 · 주 · 월 기간별 수익 · 초과 · MDD |
 | `src/optiq_rwa/dashboard/app.py` | FastAPI + TradingView lightweight-charts. `scripts/export_dashboard.py` 가 정적 `docs/index.html` 생성 |
 | `scripts/run_real_backtest.py` | `data/raw/*_chain.parquet` (Deribit 체결 이력) 로 Idea 1 · 3 · 4 backtest → `results/real/` |
-| `scripts/launchd/` | `com.optiq.snapshot` (900초) · `com.optiq.readme` (3600초, README 실시간 현황 갱신 · push) · `com.optiq.trade` (04:20 KST) · `com.optiq.settle` (17:30 KST, 결제 · NAV · export · OOS walk-forward 재계산 · README · DB commit) |
-| `scripts/update_readme.py` | README `AUTO:STATUS` 블록 재작성: 라이브 수집 현황 · paper NAV · 현재 국면 · OOS walk-forward 지표(전체 + 최근 30밤) |
+| `scripts/launchd/` | `com.optiq.snapshot` (900초) · `com.optiq.readme` (3600초, `daily.sh status` → `status` 브랜치) · `com.optiq.trade` (04:20 KST) · `com.optiq.settle` (17:30 KST, 결제 · NAV · export · 라이브 체인 · OOS walk-forward 재계산 · `docs/status.md` · DB commit) |
+| `scripts/update_status.py` | `docs/status.md` 생성: 라이브 수집 현황 · paper NAV · 실행 게이트 전/후 비교 · 현재 국면 · OOS walk-forward 지표(전체 + 최근 30밤, 최근 구간 DSR 별도) |
+| `src/optiq_rwa/paper/gate.py` | 아이디어 8 실행 게이트: 기대 결제가치(아이디어 4 보정 payback × 라이브 mid) − ask/bid − 수수료 > 0 인 패키지만 진입. paper 엔진에 `*_gated` 쌍둥이 전략으로 적용, 보류는 `status='gated'` 로 기록 |
+| `src/optiq_rwa/data/livechain.py` | 라이브 호가(19:20 UTC snapshot, 실제 best bid/ask)로 매일 밤 체인 생성 → `data/live/`. walk-forward 스크립트는 과거 체결 체인 + 라이브 밤을 이어 붙여 표본 외 구간을 매일 늘림 |
+| `scripts/notify.sh` | 스케줄 단계 실패 알림 (macOS 알림 · `alerts.log` · 선택: Teams / Slack webhook) |
 
 ### Universe 필터 (하루 option 거래량 10억 원 이상, 2026-11-20 24h)
 
@@ -323,12 +291,12 @@ optiq-rwa/
 |---|---|---|---|
 | 6 | **수익원 · 거래소 공통 인터페이스** | `data/` 아래 `Venue` 추상 클래스 + factory. `deribit.py` 를 첫 구현체로, 실물 RWA 수익원도 같은 스키마(노출, 수익률, 비용)로 정규화 | RWA 수익원 · 옵션 거래소를 바꿔 끼워도 전략 · 백테스트 코드가 그대로인가? |
 | 7 | **자본조정 수익 (슬리브별 RW 노출)** | `backtest/metrics.py`. 자본조정 수익 = 초과수익 ÷ Σ(노출 × 위험가중치). RWA 슬리브는 낮은 가중치, 옵션 매수는 프리미엄 100%, 매도는 최대손실 기준 | RWA 이자 1단위로 산 옵션(1)과 RWA 담보로 판 옵션(3) 중 자본 효율이 높은 쪽은? |
-| 8 | **실행 경제성 게이트** | `backtest/costs.py` · `paper/engine.py`. 아이디어 4 의 축소추정 기대이익 − TC(수수료 · spread · slippage) ≤ 0 이면 주문 보류, 예산은 다음 밤으로 이월 | 비용을 넘는 밤에만 쓰고 나머지 이자를 적립하면 SR · MDD 가 어떻게 바뀌나? |
+| 8 | **실행 경제성 게이트** ✅ paper 적용 | `backtest/costs.py` · `paper/engine.py`. 아이디어 4 의 축소추정 기대이익 − TC(수수료 · spread · slippage) ≤ 0 이면 주문 보류, 예산은 다음 밤으로 이월 | 비용을 넘는 밤에만 쓰고 나머지 이자를 적립하면 SR · MDD 가 어떻게 바뀌나? |
 | 9 | **예산 · 담보 상호작용 패널** | `dashboard/`. 누적 이자 예산, 사용 · 이월 예산, 담보 haircut 후 매도 한도, 게이트 보류 건수 | RWA 금리 · haircut 이 바뀌면 옵션 운용 한도가 얼마나 움직이나? |
 | 10 | **국면 스트레스: 예산 소진 일수** | `risk/regime.py` 국면을 시나리오로 하룻밤 꼬리손실 Monte Carlo | 최악 국면에서 RWA 이자 예산이 옵션 손실을 몇 밤 버티고, 언제 원금을 건드리나? |
 
 ### 다음 단계 (로드맵 반영 제안)
-- [ ] Phase 6: 아이디어 8 게이트를 기존 TC 모델에 연결 — 가장 작은 변경으로 바로 검증 가능
+- [x] Phase 6: 아이디어 8 게이트를 paper 엔진에 연결 (`paper/gate.py`, `*_gated` 쌍둥이 전략) — 전/후 비교는 실시간 현황 페이지
 - [ ] Phase 6: 아이디어 7 자본조정 수익을 `results/sweep_summary.csv` 열로 추가
 - [ ] Phase 7: 아이디어 6 인터페이스로 실물 RWA 수익률 시계열 연결 (기존 Phase 7 항목과 통합)
 - [ ] Phase 7: 아이디어 9 패널 · 아이디어 10 스트레스 테스트
