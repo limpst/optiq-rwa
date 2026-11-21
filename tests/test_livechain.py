@@ -45,3 +45,7 @@ def test_load_chain_appends_after_raw(con, tmp_path):
     assert out.night.nunique() == 2 and len(out) == 24
     assert set(out[out.night == 1].quote_source) == {"live_book"}
     assert livechain.available_coins(tmp_path / "raw", tmp_path / "live") == ["SOL"]
+
+
+def test_eth_is_collected_live():
+    assert livechain.BASE_OF["ETH"] == "ETH"
