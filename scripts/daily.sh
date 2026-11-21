@@ -3,7 +3,8 @@
 #   daily.sh trade    04:20 KST (19:20 UTC) paper orders on the fresh snapshot (base + gated twins, idea 8)
 #   daily.sh settle   17:30 KST (08:30 UTC) settle, mark NAV, export parquet, live chain nights (data/live),
 #                     OOS walk-forward refresh (regime labels + validation), docs/status.md, commit+push to main
-#   daily.sh status   hourly (com.optiq.readme) docs/status.md -> force-push as the single commit of branch `status`
+#   daily.sh status   hourly (com.optiq.readme) docs/status.md -> force-push as the single commit of branch `status`;
+#                     alerts once when the newest snapshot is > 45 min old (collector stalled)
 #                     (main history untouched). `readme` is accepted as an alias for agents installed earlier.
 # Any failed step -> scripts/notify.sh (macOS notification, optional Teams / Slack webhook, data/logs/alerts.log).
 cd "$(dirname "$0")/.." || exit 1
@@ -32,7 +33,14 @@ case "$1" in
     ;;
   status|readme)
     LOG=data/logs/status.log
-    step status "$PY" scripts/update_status.py
+    "$PY" scripts/update_status.py --max-age-min 45 >> $LOG 2>&1; rc=$?
+    STALE=data/logs/.snapshot_stale                       # one alert per stall episode, cleared when data flows again
+    if [ $rc -eq 3 ]; then
+      [ -f $STALE ] || { touch $STALE; FAILED+=("snapshot-stale(>45min)"); }
+    else
+      rm -f $STALE
+      [ $rc -ne 0 ] && FAILED+=("status")
+    fi
     if [ -f docs/status.md ]; then
       blob=$(git hash-object -w docs/status.md) \
         && tree=$(printf '100644 blob %s\tREADME.md\n' "$blob" | git mktree) \
