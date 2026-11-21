@@ -10,10 +10,13 @@ Sources (all local, no network):
   results/regime_validation_nav_*.csv OOS walk-forward NAV metrics (full period)
   results/regime_validation_curves.csv OOS walk-forward NAV curves (recent 30-night window, with its own DSR)
 
-Run: PYTHONPATH=src python scripts/update_status.py
+Run: PYTHONPATH=src python scripts/update_status.py [--max-age-min 45]
+Exit code 3 when the newest snapshot is older than --max-age-min (collector stalled: Mac asleep, launchd not loaded,
+network down). The page is still written; daily.sh turns code 3 into one alert per stall episode.
 """
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import pathlib
 import sqlite3
@@ -50,6 +53,11 @@ def md_table(rows: list[list], head: list[str], align: str | None = None) -> str
     return "\n".join(["| " + " | ".join(head) + " |", "|" + a + "|"] + ["| " + " | ".join(map(str, r)) + " |" for r in rows])
 
 
+def snapshot_age_min(con) -> float:
+    last = con.execute("select max(ts_ms) from snapshots").fetchone()[0]
+    return float("inf") if last is None else (dt.datetime.now(dt.timezone.utc).timestamp() * 1000 - last) / 60_000
+
+
 def live_section(con) -> list[str]:
     out = ["### 라이브 수집 (Deribit 공개 API, 15분 주기)"]
     n, first, last = con.execute("select count(*), min(ts_ms), max(ts_ms) from snapshots").fetchone()
@@ -59,8 +67,10 @@ def live_section(con) -> list[str]:
     n24 = con.execute("select count(*) from snapshots where ts_ms > ?", (cut,)).fetchone()[0]
     sid = con.execute("select max(snap_id) from snapshots").fetchone()[0]
     px = dict(con.execute("select index_name, price from index_price where snap_id = ?", (sid,)).fetchall())
+    age = snapshot_age_min(con)
     rows = [["snapshot 수 (전체 / 최근 24h)", f"{n:,} / {n24}"],
-            ["기간 (KST)", f"{kst(first)} → {kst(last)}"]]
+            ["기간 (KST)", f"{kst(first)} → {kst(last)}"],
+            ["마지막 snapshot 경과", f"{age:,.0f}분" + (" ⚠️ 수집 정지 의심" if age > 45 else "")]]
     for k in ("btc_usd", "eth_usd", "sol_usd"):
         if k in px:
             rows.append([f"index {k.split('_')[0].upper()}", f"{px[k]:,.2f} USD"])
@@ -164,9 +174,21 @@ def build() -> str:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--max-age-min", type=float, default=None, help="exit 3 if the newest snapshot is older than this")
+    a = ap.parse_args()
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(build())
     print(f"wrote {OUT.relative_to(ROOT)}")
+    if a.max_age_min is not None:
+        con = sqlite3.connect(SETTINGS.db_path)
+        try:
+            age = snapshot_age_min(con)
+        finally:
+            con.close()
+        if age > a.max_age_min:
+            print(f"STALE: newest snapshot is {age:,.0f} min old (limit {a.max_age_min:.0f})")
+            return 3
     return 0
 
 
