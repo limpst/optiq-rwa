@@ -1,36 +1,48 @@
 #!/bin/zsh
-# daily jobs (launchd):
-#   daily.sh trade    04:20 KST (19:20 UTC) paper orders on the fresh snapshot
-#   daily.sh settle   17:30 KST (08:30 UTC) settle expired paper positions, mark NAV, export parquet,
-#                     refresh OOS walk-forward (regime labels + validation), rewrite README status, commit+push DB
-#   daily.sh readme   hourly (com.optiq.readme) rewrite README status block from the live DB, commit+push README only
+# launchd jobs:
+#   daily.sh trade    04:20 KST (19:20 UTC) paper orders on the fresh snapshot (base + gated twins, idea 8)
+#   daily.sh settle   17:30 KST (08:30 UTC) settle, mark NAV, export parquet, live chain nights (data/live),
+#                     OOS walk-forward refresh (regime labels + validation), docs/status.md, commit+push to main
+#   daily.sh status   hourly (com.optiq.readme) docs/status.md -> force-push as the single commit of branch `status`
+#                     (main history untouched). `readme` is accepted as an alias for agents installed earlier.
+# Any failed step -> scripts/notify.sh (macOS notification, optional Teams / Slack webhook, data/logs/alerts.log).
 cd "$(dirname "$0")/.." || exit 1
 export PYTHONPATH=src
 PY="${OPTIQ_PY:-$HOME/dev/quantum/bin/python}"
 mkdir -p data/logs
 LOG=data/logs/daily.log
+FAILED=()
+step() { local n=$1; shift; "$@" >> $LOG 2>&1 || FAILED+=("$n"); }
 case "$1" in
   trade)
-    "$PY" -m optiq_rwa.data.live snapshot >> $LOG 2>&1
-    "$PY" -m optiq_rwa.paper.engine trade >> $LOG 2>&1
+    step snapshot "$PY" -m optiq_rwa.data.live snapshot
+    step trade    "$PY" -m optiq_rwa.paper.engine trade
     ;;
   settle)
-    "$PY" -m optiq_rwa.data.live snapshot >> $LOG 2>&1
-    "$PY" -m optiq_rwa.paper.engine settle >> $LOG 2>&1
-    "$PY" -m optiq_rwa.paper.engine nav >> $LOG 2>&1
-    "$PY" -m optiq_rwa.data.live export >> $LOG 2>&1
-    "$PY" scripts/export_dashboard.py >> $LOG 2>&1 || true
-    "$PY" scripts/run_regime.py >> $LOG 2>&1 || true              # walk-forward labels (past nights only)
-    "$PY" scripts/run_regime_validation.py >> $LOG 2>&1 || true   # OOS walk-forward NAV / SR / IR / MDD / DSR
-    "$PY" scripts/update_readme.py >> $LOG 2>&1 || true
-    scripts/publish_db.sh >> $LOG 2>&1
+    step snapshot   "$PY" -m optiq_rwa.data.live snapshot
+    step settle     "$PY" -m optiq_rwa.paper.engine settle
+    step nav        "$PY" -m optiq_rwa.paper.engine nav
+    step export     "$PY" -m optiq_rwa.data.live export
+    step dashboard  "$PY" scripts/export_dashboard.py
+    step livechain  "$PY" -m optiq_rwa.data.livechain build          # live order-book nights -> data/live/
+    step regime     "$PY" scripts/run_regime.py                      # walk-forward labels (past nights only)
+    step validation "$PY" scripts/run_regime_validation.py           # OOS walk-forward NAV / SR / IR / MDD / DSR
+    step status     "$PY" scripts/update_status.py
+    step publish    scripts/publish_db.sh
     ;;
-  readme)
-    "$PY" scripts/update_readme.py >> data/logs/readme.log 2>&1 || exit 0
-    git add README.md
-    git diff --cached --quiet && exit 0
-    git commit -q -m "readme: status $(date -u +%Y-%m-%dT%H:%MZ)" >> data/logs/readme.log 2>&1
-    git pull -q --rebase --autostash origin main >> data/logs/readme.log 2>&1 && git push -q origin main >> data/logs/readme.log 2>&1
+  status|readme)
+    LOG=data/logs/status.log
+    step status "$PY" scripts/update_status.py
+    if [ -f docs/status.md ]; then
+      blob=$(git hash-object -w docs/status.md) \
+        && tree=$(printf '100644 blob %s\tREADME.md\n' "$blob" | git mktree) \
+        && c=$(git commit-tree "$tree" -m "status $(date -u +%Y-%m-%dT%H:%MZ)") \
+        && git push -q -f origin "$c:refs/heads/status" >> $LOG 2>&1 || FAILED+=("push-status")
+    fi
     ;;
-  *) echo "usage: daily.sh trade|settle|readme"; exit 2;;
+  *) echo "usage: daily.sh trade|settle|status"; exit 2;;
 esac
+if [ ${#FAILED[@]} -gt 0 ]; then
+  /bin/zsh scripts/notify.sh "OptiQ $1 실패: ${FAILED[*]}" "$(tail -n 6 $LOG)"
+  exit 1
+fi
