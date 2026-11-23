@@ -102,6 +102,7 @@
 
 - **저장 정책 (사용자 선택 2026-11-23)**: SQLite `data/optiq.db` 는 로컬에만 둔다 (gitignore). GitHub 에는 Parquet (zstd) 일별 파일 + results + docs 만 매일 commit (`scripts/publish_data.sh`). `book_summary` 는 만기 8일 이내 종목만 저장한다 (거래량 필터는 전 종목으로 계산한 뒤 집계만 보관). snapshot 1개 ≈ 0.65 MB (전: 1.4 MB). 과거 commit 에 남은 DB blob (12.5 · 59 MB) 은 history 에 그대로 있다.
 - **DB 잠금 버그 (2026-11-21 · 22 paper 주문 실패)**: 04:20 KST 작업이 snapshot 을 한 번 더 돌리는 동안 15분 snapshot 과 write lock 이 겹쳐 `database is locked`. 수정: snapshot 은 단계마다 commit, busy_timeout 60 s, daily 작업은 15분 snapshot 의 최신 호가만 쓴다.
+- **게이트 역산 (`paper/gate_view.py`, 2026-11-23)**: 지금 보정 (BTC m=1 콜 payback 0.82, se 0.16 → 하한 0.56) 으로는 매수 게이트가 열리려면 ask 가 약 60% 내려야 하고, 매도 (m=1.5) 는 bid 가 56~94% 올라야 한다. 모든 leg 가 막혀 있다. 원인 두 가지: 얇은 보정 표본의 z·se, 12.5% 수수료 상한. 대시보드 "실행 게이트가 열리려면" 표.
 - **paper 첫 결과 (2026-11-20 밤, 11-21 08:00 UTC 결제)**: yield_calls 콜 3건 매수 74.0 USD → 결제 후 −81.4 USD (수수료 7.4 포함, 전부 OTM). short_condor · regime_switch 는 ETH condor 4 leg (프리미엄 수취 180, 지불 105) → +43.3 USD (수수료 31.7 포함). NAV: yield_calls 1,000,412 · condor 1,000,537 (RWA 이자 493 포함). 11-21 · 22 밤은 잠금 버그로 주문 없음.
 
 ### 실행

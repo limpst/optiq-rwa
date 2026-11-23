@@ -221,7 +221,13 @@ def build_bundle(con=None) -> dict:
         prev = _records(preview(con).round(4))
     except Exception as e:
         prev = [{"error": str(e)[:120]}]
+    try:
+        from ..paper.gate_view import thresholds
+        gate_rows = _records(thresholds(con).round(4))
+    except Exception as e:
+        gate_rows = [{"error": str(e)[:120]}]
     paper = {
+        "gate": gate_rows,
         "preview": prev,
         "nav": _records(store.read(con, "SELECT * FROM paper_nav ORDER BY date")),
         "nav_series": {k: _series(v.reset_index(), "date", "nav", ms=False) for k, v in navs.items()},
