@@ -307,6 +307,14 @@ def build_bundle(con=None) -> dict:
         pos["night"] = pos.expiry_ts.map(lambda v: store.utc_date(int(v)))
         gsum = pos.groupby(["night", "strategy"]).agg(pnl=("pnl_usd", lambda x: float(np.nansum(x))), n=("pnl_usd", "size"), settled=("settled", "sum"),
                                                     tp=("exit_reason", lambda x: int((x == "tp").sum())), sl=("exit_reason", lambda x: int((x == "sl").sum()))).reset_index()
+        # net the trading fees paid on entry (fee_usd lives on the order, not the position) so the cell matches paper_nav's option_pnl
+        fees = store.read(con, "SELECT o.strategy, i.expiration_ts, COALESCE(o.fee_usd,0) fee FROM paper_orders o JOIN instruments i USING (instrument_name) WHERE o.status='filled'")
+        if not fees.empty:
+            fees["night"] = fees.expiration_ts.map(lambda v: store.utc_date(int(v)))
+            fsum = fees.groupby(["night", "strategy"]).fee.sum().reset_index()
+            gsum = gsum.merge(fsum, on=["night", "strategy"], how="left").fillna({"fee": 0.0})
+            gsum["pnl_gross"] = gsum.pnl
+            gsum["pnl"] = gsum.pnl - gsum.fee
         # orders that produced no position: gated (idea 8 blocked), unfilled (maker never crossed), resting (maker still waiting)
         ords = store.read(con, "SELECT o.date, o.strategy, o.status, i.expiration_ts FROM paper_orders o JOIN instruments i USING (instrument_name) WHERE o.status IN ('gated','unfilled','resting','rejected')")
         if not ords.empty:
