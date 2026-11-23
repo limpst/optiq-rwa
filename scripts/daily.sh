@@ -14,7 +14,17 @@ PY="${OPTIQ_PY:-$HOME/dev/quantum/bin/python}"
 mkdir -p data/logs
 LOG=data/logs/daily.log
 FAILED=()
-step() { local n=$1; shift; "$@" >> $LOG 2>&1 || FAILED+=("$n"); }
+ERRS=()
+step() {   # run one step; on failure remember its name and the last meaningful error line (Error/Traceback-free) for the alert
+  local n=$1; shift; local tmp; tmp=$(mktemp)
+  if "$@" > "$tmp" 2>&1; then cat "$tmp" >> $LOG; else
+    cat "$tmp" >> $LOG; FAILED+=("$n")
+    local line; line=$(grep -E "Error|error:|Assert|FAILED|failed|locked|No such|not found" "$tmp" | grep -v "^  File\|Traceback" | tail -1 | cut -c1-200)
+    [ -z "$line" ] && line=$(grep -v "^\s*$" "$tmp" | tail -1 | cut -c1-200)
+    ERRS+=("[$n] $line")
+  fi
+  rm -f "$tmp"
+}
 case "$1" in
   trade)
     # quotes come from the 15-min snapshot job; an extra snapshot here held the DB write lock (11-21/22 trades failed)
@@ -51,6 +61,6 @@ case "$1" in
   *) echo "usage: daily.sh trade|settle|status"; exit 2;;
 esac
 if [ ${#FAILED[@]} -gt 0 ]; then
-  /bin/zsh scripts/notify.sh "OptiQ $1 실패: ${FAILED[*]}" "$(tail -n 6 $LOG)"
+  /bin/zsh scripts/notify.sh "OptiQ $1 실패: ${FAILED[*]}" "$(printf '%s\n' "${ERRS[@]}")"
   exit 1
 fi
