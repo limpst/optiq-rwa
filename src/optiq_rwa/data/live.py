@@ -107,8 +107,10 @@ def fetch_index_prices(snap_id: int, bases) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def pick_depth_instruments(inst: pd.DataFrame, summ: pd.DataFrame, bases, ts_ms: int, max_expiries=2, max_abs_m=2.5) -> pd.DataFrame:
-    """Nearest `max_expiries` expiries per base, strikes within |m| <= max_abs_m (m in sigma*sqrt(T) units from mark_iv)."""
+def pick_depth_instruments(inst: pd.DataFrame, summ: pd.DataFrame, bases, ts_ms: int, max_expiries=2, max_abs_m=2.5, max_abs_m_later=1.5) -> pd.DataFrame:
+    """Nearest `max_expiries` expiries per base, strikes within |m| <= max_abs_m (m in sigma*sqrt(T) units from mark_iv).
+    Expiries after the nearest one keep only |m| <= max_abs_m_later: the paper engine trades the nearest expiry at 19:20 UTC
+    and needs its full wing range for fills / tp-sl, while later expiries only feed the IV history (cuts ~30% of calls)."""
     df = inst[inst.base.isin(bases) & (inst.expiration_ts > ts_ms)].merge(
         summ[["instrument_name", "mark_iv", "underlying_price"]], on="instrument_name", how="left")
     keep = []
@@ -119,7 +121,8 @@ def pick_depth_instruments(inst: pd.DataFrame, summ: pd.DataFrame, bases, ts_ms:
         iv = g.mark_iv.fillna(g.mark_iv.median()).fillna(60.0) / 100
         ss = sigma_sqrt_t(iv.values, hours.values)
         g["m"] = np.log(g.strike / g.underlying_price) / ss
-        keep.append(g[g.m.abs() <= max_abs_m])
+        lim = np.where(g.expiration_ts == exps[0], max_abs_m, max_abs_m_later)
+        keep.append(g[g.m.abs() <= lim])
     return pd.concat(keep) if keep else df.iloc[0:0]
 
 
