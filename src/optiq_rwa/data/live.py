@@ -112,7 +112,7 @@ def pick_depth_instruments(inst: pd.DataFrame, summ: pd.DataFrame, bases, ts_ms:
     Expiries after the nearest one keep only |m| <= max_abs_m_later: the paper engine trades the nearest expiry at 19:20 UTC
     and needs its full wing range for fills / tp-sl, while later expiries only feed the IV history (cuts ~30% of calls)."""
     df = inst[inst.base.isin(bases) & (inst.expiration_ts > ts_ms)].merge(
-        summ[["instrument_name", "mark_iv", "underlying_price"]], on="instrument_name", how="left")
+        summ[["instrument_name", "mark_iv", "underlying_price", "bid", "ask"]], on="instrument_name", how="left")
     keep = []
     for b, g in df.groupby("base"):
         exps = sorted(g.expiration_ts.unique())[:max_expiries]
@@ -122,7 +122,8 @@ def pick_depth_instruments(inst: pd.DataFrame, summ: pd.DataFrame, bases, ts_ms:
         ss = sigma_sqrt_t(iv.values, hours.values)
         g["m"] = np.log(g.strike / g.underlying_price) / ss
         lim = np.where(g.expiration_ts == exps[0], max_abs_m, max_abs_m_later)
-        keep.append(g[g.m.abs() <= lim])
+        quoted = g.bid.notna() | g.ask.notna()                      # skip strikes with no quote at all (deep wings), keep |m| <= 1 regardless
+        keep.append(g[(g.m.abs() <= lim) & (quoted | (g.m.abs() <= 1.0))])
     return pd.concat(keep) if keep else df.iloc[0:0]
 
 
