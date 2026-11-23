@@ -74,6 +74,10 @@ def _migrate(con: sqlite3.Connection) -> None:
     ocols = {r[1] for r in con.execute("PRAGMA table_info(paper_orders)")}
     if "fill_mid" not in ocols:
         con.execute("ALTER TABLE paper_orders ADD COLUMN fill_mid REAL")     # mid at the moment a resting order fills (adverse selection)
+    pcols = {r[1] for r in con.execute("PRAGMA table_info(paper_positions)")}
+    for c, typ in (("exit_px", "REAL"), ("exit_ts_ms", "INTEGER"), ("exit_usd", "REAL"), ("exit_reason", "TEXT")):
+        if c not in pcols:
+            con.execute(f"ALTER TABLE paper_positions ADD COLUMN {c} {typ}")   # intraday close (take-profit / stop-loss)
     cols = {r[1] for r in con.execute("PRAGMA table_info(instruments)")}
     if "min_trade_amount" not in cols:
         con.execute("ALTER TABLE instruments ADD COLUMN min_trade_amount REAL")

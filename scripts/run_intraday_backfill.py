@@ -63,6 +63,20 @@ for date, g in snaps.groupby("date"):
             base_row = dict(date=date, base=b, kind=kind, m=round(float(r.m), 2), instrument=r.instrument_name, sold_bid=sold, mid_entry=float(r.mid), spot=float(r.spot), n_snaps=len(hist))
             # hold to settlement
             rows.append(dict(base_row, rule="hold", pnl_per_prem=(sold - fee_in - payoff) / sold if dp else np.nan, exit_hours=float(r.hours), closed=False))
+            # target 50% with a stop at 2x the sale (first crossing wins)
+            okt = np.isfinite(ask) & (ask <= sold * 0.5); oks = np.isfinite(ask) & (ask >= sold * 2.0); okb = okt | oks
+            if okb.any():
+                i = int(np.argmax(okb)); px = float(ask[i]); fee_out = float(CM.fee(px / r.spot)) * r.spot
+                rows.append(dict(base_row, rule="target 50% + stop 2x", pnl_per_prem=(sold - fee_in - px - fee_out) / sold, exit_hours=float(hrs[i]), closed=True, exit_reason=("tp" if okt[i] else "sl")))
+            else:
+                rows.append(dict(base_row, rule="target 50% + stop 2x", pnl_per_prem=(sold - fee_in - payoff) / sold if dp else np.nan, exit_hours=float(r.hours), closed=False, exit_reason="hold"))
+            # same, but the stop is judged on mid (>= 2x entry mid) so a one-sided ask spike does not trigger it; exit at ask
+            okm = np.isfinite(mid) & (mid >= 2.0 * r.mid) if len(mid) else np.zeros(0, bool); okb2 = okt | okm
+            if okb2.any():
+                i = int(np.argmax(okb2)); px = float(ask[i]) if np.isfinite(ask[i]) else float(mid[i]); fee_out = float(CM.fee(px / r.spot)) * r.spot
+                rows.append(dict(base_row, rule="target 50% + stop 2x (mid)", pnl_per_prem=(sold - fee_in - px - fee_out) / sold, exit_hours=float(hrs[i]), closed=True, exit_reason=("tp" if okt[i] else "sl")))
+            else:
+                rows.append(dict(base_row, rule="target 50% + stop 2x (mid)", pnl_per_prem=(sold - fee_in - payoff) / sold if dp else np.nan, exit_hours=float(r.hours), closed=False, exit_reason="hold"))
             for tg in TARGETS:
                 lim = sold * (1 - tg)
                 ok = np.isfinite(ask) & (ask <= lim)

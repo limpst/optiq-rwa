@@ -51,6 +51,9 @@ STRATEGIES.update({f"{k}_gated_z1": dict(v, base=k, gate=True, gate_z=1.0) for k
 # one base) fills only when every leg crosses; otherwise nothing is traded that night. Maker fee: USDC daily linear
 # 0 bps (Deribit, until 2027-01-31), inverse BTC/ETH 3 bps capped at 12.5% of premium. See fill_resting().
 STRATEGIES.update({f"{k}_maker": dict(v, base=k, maker=True) for k in ("yield_calls", "short_condor") for v in [STRATEGIES[k]]})
+# intraday management twin: same condor, but the package is closed before expiry when the short legs' ask falls to
+# (1 - tp) x entry (take-profit) or rises to (1 + sl) x entry (stop-loss), at the first 15-min snapshot that crosses.
+STRATEGIES["short_condor_tp50"] = dict(STRATEGIES["short_condor"], base="short_condor", tp=0.5, sl=1.0)
 TOL_M = 0.35          # accept strikes within this distance of the target m
 
 
@@ -385,9 +388,75 @@ def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.Dat
     return pd.DataFrame(rows)
 
 
+def manage_positions(con=None, log=print) -> dict:
+    """Take-profit / stop-loss for strategies with tp/sl: scan stored order books after entry; the first snapshot where the
+    short legs' total ask <= (1-tp) x entry (tp) or >= (1+sl) x entry (sl) closes the whole package (shorts bought at ask,
+    wings sold at bid, taker fees). Closed positions are marked settled with payoff_usd = exit cash flow."""
+    con = con or store.connect()
+    out = dict(tp=0, sl=0, open=0)
+    names = [k for k, v in STRATEGIES.items() if v.get("tp") or v.get("sl")]
+    if not names:
+        return out
+    ph = ",".join("?" * len(names))
+    pos = store.read(con, f"SELECT p.*, i.base, i.inverse, i.contract_size cs FROM paper_positions p JOIN instruments i USING (instrument_name) "
+                          f"WHERE p.settled=0 AND p.exit_reason IS NULL AND p.strategy IN ({ph})", names)
+    if pos.empty:
+        return out
+    for (strategy, entry_ts, base), pk in pos.groupby(["strategy", "entry_ts_ms", "base"]):
+        p = STRATEGIES[strategy]
+        shorts = pk[pk.side == "sell"]
+        if shorts.empty:
+            continue
+        # per-snapshot total ask of the short legs after entry
+        frames = []
+        for _, o in shorts.iterrows():
+            h = store.read(con, """SELECT s.snap_id, s.ts_ms, b.bid_px, b.ask_px, st.underlying_price FROM order_book b JOIN snapshots s USING (snap_id)
+                                   LEFT JOIN inst_state st ON st.instrument_name=b.instrument_name AND st.snap_id=b.snap_id
+                                   WHERE b.instrument_name=? AND b.level=0 AND s.ts_ms>? AND s.ts_ms<=?""", (o.instrument_name, int(entry_ts), int(o.expiry_ts)))
+            if h.empty:
+                frames = []
+                break
+            conv = h.underlying_price.fillna(o.spot_entry).values if o.inverse == 1 else np.ones(len(h))
+            h["ask_usd"] = pd.to_numeric(h.ask_px, errors="coerce").values * conv * float(o.qty) * float(o.cs or 1.0)
+            frames.append(h[["snap_id", "ts_ms", "ask_usd"]].rename(columns={"ask_usd": o.instrument_name}))
+        if not frames:
+            out["open"] += len(pk); continue
+        tot = frames[0]
+        for f in frames[1:]:
+            tot = tot.merge(f, on=["snap_id", "ts_ms"], how="inner")
+        tot = tot.sort_values("ts_ms")
+        cost = tot.drop(columns=["snap_id", "ts_ms"]).sum(axis=1).values
+        entry_usd = float(shorts.entry_usd.sum())
+        hit_tp = cost <= (1 - p["tp"]) * entry_usd if p.get("tp") else np.zeros(len(cost), bool)
+        hit_sl = cost >= (1 + p["sl"]) * entry_usd if p.get("sl") else np.zeros(len(cost), bool)
+        hit = hit_tp | hit_sl
+        if not hit.any():
+            out["open"] += len(pk); continue
+        i = int(np.argmax(hit)); sid, fts = int(tot.snap_id.iloc[i]), int(tot.ts_ms.iloc[i]); reason = "tp" if hit_tp[i] else "sl"
+        for _, o in pk.iterrows():
+            lvl = con.execute("SELECT bid_px, ask_px FROM order_book WHERE snap_id=? AND instrument_name=? AND level=0", (sid, o.instrument_name)).fetchone()
+            st_ = con.execute("SELECT underlying_price FROM inst_state WHERE snap_id=? AND instrument_name=?", (sid, o.instrument_name)).fetchone()
+            conv = float(st_[0]) if (o.inverse == 1 and st_ and st_[0]) else (float(o.spot_entry) if o.inverse == 1 else 1.0)
+            px = (lvl[1] if o.side == "sell" else lvl[0]) if lvl else None       # shorts bought back at ask, wings sold at bid
+            if px is None:
+                continue
+            px = float(px) * conv
+            cs = float(o.cs or 1.0)
+            cash = px * float(o.qty) * cs
+            fee = float(COST_MODEL.fee(px / conv if o.inverse == 1 else px / float(o.spot_entry))) * (conv if o.inverse == 1 else float(o.spot_entry)) * float(o.qty) * cs
+            pnl = (float(o.entry_usd) - cash - fee) if o.side == "sell" else (cash - fee - float(o.entry_usd))
+            con.execute("UPDATE paper_positions SET settled=1, exit_px=?, exit_ts_ms=?, exit_usd=?, exit_reason=?, payoff_usd=?, settle_fee_usd=?, pnl_usd=? WHERE pos_id=?",
+                        (px, fts, cash, reason, cash, fee, pnl, int(o.pos_id)))
+        out[reason] += 1
+    con.commit()
+    log(f"intraday management: {out}")
+    return out
+
+
 def settle(con=None, log=print) -> int:
     con = con or store.connect()
     fill_resting(con, log)
+    manage_positions(con, log)
     now = int(time.time() * 1000)
     pos = store.read(con, "SELECT p.*, i.option_type, i.strike, i.base, i.contract_size FROM paper_positions p JOIN instruments i USING (instrument_name) "
                           "WHERE p.settled=0 AND p.expiry_ts<=?", (now,))

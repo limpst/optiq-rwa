@@ -1,16 +1,16 @@
 # OptiQ-RWA 실시간 현황
 
-자동 생성: 2026-11-23 13:16 KST · `scripts/update_status.py` (매시간 `status` 브랜치, 매일 17:30 KST main). 손으로 고치지 마세요.
+자동 생성: 2026-11-23 14:17 KST · `scripts/update_status.py` (매시간 `status` 브랜치, 매일 17:30 KST main). 손으로 고치지 마세요.
 
 ### 라이브 수집 (Deribit 공개 API, 15분 주기)
 
 | 항목 | 값 |
 |---|---|
-| snapshot 수 (전체 / 최근 24h) | 175 / 66 |
-| 기간 (KST) | 2026-11-20 14:24 → 2026-11-23 13:15 |
-| 마지막 snapshot 경과 | 1분 |
-| index BTC | 61,267.58 USD |
-| index ETH | 1,730.72 USD |
+| snapshot 수 (전체 / 최근 24h) | 177 / 65 |
+| 기간 (KST) | 2026-11-20 14:24 → 2026-11-23 14:06 |
+| 마지막 snapshot 경과 | 10분 |
+| index BTC | 61,081.81 USD |
+| index ETH | 1,722.47 USD |
 | universe 통과 (2026-11-23) | BTC, ETH, BTC_USDC |
 
 ### Paper trading (실시간 표본 외, dry-run)
