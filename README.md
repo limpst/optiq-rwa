@@ -124,7 +124,8 @@ PYTHONPATH=src python scripts/run_qubo_bench.py
 PYTHONPATH=src uvicorn optiq_rwa.dashboard.app:app --port 8793   # http://127.0.0.1:8793
 PYTHONPATH=src python scripts/export_dashboard.py                 # docs/index.html + docs/artifact.html + docs/data.json
 python tools/probe_report_style.py --paths docs/REPORT_*.md         # 보고서 문체 검사 (위반 0 이어야 발행)
-./scripts/preflight_publish.sh                                    # 발행 전 게이트: import · tests · export · 데이터 단언 · JS 문법 · 서버 200
+./scripts/preflight_publish.sh                                    # 발행 전 게이트: import · tests · 문체 검사 · export · 데이터 단언 · JS 문법 · 서버 200
+./scripts/ship.sh "commit message"                                 # preflight → commit → pull --rebase → push (실패하면 멈춤)
 ./scripts/install_launchd.sh                                      # 자동 수집 · paper 일과 등록
 pytest -q                                                         # 17 tests
 ```
