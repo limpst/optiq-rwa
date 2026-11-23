@@ -59,6 +59,8 @@ def build_live_chain(con, coin: str, entry_hour=19, entry_min=20, tol_min=40, mi
         px = con.execute("SELECT price FROM delivery_price WHERE index_name=? AND date=?", (idx, exp_date)).fetchone()
         if not px:
             continue                                   # not settled yet
+        for c in ("bid_rel", "ask_rel", "m", "bid", "ask", "mid"):          # live_chain may hold None where a side has no quote
+            ch[c] = pd.to_numeric(ch[c], errors="coerce")
         ch = ch[np.isfinite(ch.bid_rel) & np.isfinite(ch.ask_rel) & (ch.ask_rel > 0) & np.isfinite(ch.m)].copy()
         if ch.empty:
             continue
