@@ -263,7 +263,7 @@ def build_bundle(con=None) -> dict:
     maker = {"legs": _records(mk.round(4)), "summary": []}
     if not mk.empty:
         sm = mk.groupby(["strategy", "side"]).agg(legs=("crossed", "size"), leg_fill=("crossed", "mean"), pkg_fill=("package_filled", "mean"),
-                                                 hours_to_fill=("hours_to_fill", "median"),
+                                                 hours_to_fill=("hours_to_fill", "median"), adverse_pct=("adverse_pct", "median"),
                                                  payback_mid_filled=("payback_mid", lambda x: float(np.nanmean(x[mk.loc[x.index, "crossed"]])) if mk.loc[x.index, "crossed"].any() else np.nan)).reset_index()
         maker["summary"] = _records(sm.round(3))
     paper = {
