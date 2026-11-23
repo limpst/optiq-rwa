@@ -154,3 +154,32 @@ def test_period_table_matches_total():
     assert np.isclose((1 + m.ret).prod() - 1, nav.iloc[-1] / nav.iloc[0] - 1, atol=1e-9)   # day 1 = starting NAV
     s = summary(nav)
     assert s["total"]["n_days"] == 59 and "W" in s
+
+
+def test_maker_resting_fill_and_unfilled(con):
+    """Maker twin rests at mid; a later snapshot with ask <= limit fills it (0 maker fee for USDC); no crossing -> unfilled."""
+    from optiq_rwa.paper import engine as eng
+    strategies = {"yield_calls_maker": eng.STRATEGIES["yield_calls_maker"]}
+    out = eng.trade(con, nav0=100_000.0, min_hours=6, max_hours=26, strategies=strategies, log=lambda *_: None)
+    assert out["yield_calls_maker"]["resting"] == 1
+    o = store.read(con, "SELECT * FROM paper_orders WHERE status='resting'").iloc[0]
+    lvl0 = store.read(con, "SELECT bid_px, ask_px FROM order_book WHERE snap_id=1 AND instrument_name=? AND level=0", (o.instrument_name,)).iloc[0]
+    assert o.instrument_name.endswith("-105-C") and np.isclose(o.limit_px, (lvl0.bid_px + lvl0.ask_px) / 2)   # rests at mid
+    # add a later snapshot (30 min later) where the ask drops to the limit -> fill
+    ts2 = int(o.ts_ms) + 1_800_000
+    con.execute("INSERT INTO snapshots (snap_id, ts_ms, date) VALUES (2, ?, ?)", (ts2, store.utc_date(ts2)))
+    con.execute("INSERT INTO order_book VALUES (2, ?, 0, ?, 5, ?, 5)", (o.instrument_name, o.limit_px - 0.2, o.limit_px))
+    con.execute("INSERT INTO inst_state (snap_id, instrument_name, underlying_price) VALUES (2, ?, 100.0)", (o.instrument_name,))
+    con.commit()
+    res = eng.fill_resting(con, log=lambda *_: None)
+    assert res["filled"] == 1
+    f = store.read(con, "SELECT * FROM paper_orders WHERE order_id=?", (int(o.order_id),)).iloc[0]
+    assert f.status == "filled" and np.isclose(f.fill_px, o.limit_px) and f.fee_usd == 0.0 and f.fill_ts_ms == ts2
+    assert store.read(con, "SELECT COUNT(*) n FROM paper_positions WHERE strategy='yield_calls_maker'").n.iloc[0] == 1
+    # a second resting order that never crosses and whose expiry passed -> unfilled
+    con.execute("INSERT INTO paper_orders (ts_ms,date,strategy,instrument_name,side,qty,limit_px,status,spot,snap_id,note) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (int(o.ts_ms), o.date, "yield_calls_maker", o.instrument_name, "buy", 1.0, 0.01, "resting", 100.0, 1, "test"))
+    con.execute("UPDATE instruments SET expiration_ts=? WHERE instrument_name=?", (int(time.time() * 1000) - 1000, o.instrument_name))
+    con.commit()
+    res = eng.fill_resting(con, log=lambda *_: None)
+    assert res["unfilled"] == 1

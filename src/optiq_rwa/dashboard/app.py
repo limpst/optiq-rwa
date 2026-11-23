@@ -259,7 +259,15 @@ def build_bundle(con=None) -> dict:
         gate_rows = _records(thresholds(con).round(4))
     except Exception as e:
         gate_rows = [{"error": str(e)[:120]}]
+    mk = read_csv(RESULTS / "maker_backfill.csv")
+    maker = {"legs": _records(mk.round(4)), "summary": []}
+    if not mk.empty:
+        sm = mk.groupby(["strategy", "side"]).agg(legs=("crossed", "size"), leg_fill=("crossed", "mean"), pkg_fill=("package_filled", "mean"),
+                                                 hours_to_fill=("hours_to_fill", "median"),
+                                                 payback_mid_filled=("payback_mid", lambda x: float(np.nanmean(x[mk.loc[x.index, "crossed"]])) if mk.loc[x.index, "crossed"].any() else np.nan)).reset_index()
+        maker["summary"] = _records(sm.round(3))
     paper = {
+        "maker": maker,
         "gate": gate_rows,
         "preview": prev,
         "nav": _records(store.read(con, "SELECT * FROM paper_nav ORDER BY date")),

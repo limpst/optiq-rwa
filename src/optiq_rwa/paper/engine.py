@@ -46,6 +46,11 @@ STRATEGIES = {
 #   *_gated_z1  z = 1.0 (16% quantile)            relaxed twin, to measure how much the bound costs
 STRATEGIES.update({f"{k}_gated": dict(v, base=k, gate=True) for k, v in list(STRATEGIES.items())})
 STRATEGIES.update({f"{k}_gated_z1": dict(v, base=k, gate=True, gate_z=1.0) for k, v in list(STRATEGIES.items()) if not v.get("gate")})
+# maker twins: rest a limit order at mid instead of crossing the spread; filled only if a later snapshot before expiry
+# shows the market trading through the limit (ask <= limit for buys, bid >= limit for sells). A package (all legs of
+# one base) fills only when every leg crosses; otherwise nothing is traded that night. Maker fee: USDC daily linear
+# 0 bps (Deribit, until 2027-01-31), inverse BTC/ETH 3 bps capped at 12.5% of premium. See fill_resting().
+STRATEGIES.update({f"{k}_maker": dict(v, base=k, maker=True) for k in ("yield_calls", "short_condor") for v in [STRATEGIES[k]]})
 TOL_M = 0.35          # accept strikes within this distance of the target m
 
 
@@ -209,6 +214,79 @@ def _place(con, snap_id, ts, date, strategy, row, side, usd_target, note=""):
     return -fill_usd if side == "buy" else fill_usd
 
 
+def _rest(con, snap_id, ts, date, strategy, plan) -> int:
+    """Record resting limit orders at mid (status='resting'); no position until fill_resting() sees a crossing."""
+    n = 0
+    for o in plan:
+        r = o["row"]
+        mid = float(r.mid)
+        if not np.isfinite(mid) or mid <= 0:
+            continue
+        cs, _, _ = _contract_size(con, r.instrument_name)
+        qty = o["usd"] / (mid * cs)
+        con.execute("INSERT INTO paper_orders (ts_ms,date,strategy,instrument_name,side,qty,limit_px,status,spot,snap_id,note) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (ts, date, strategy, r.instrument_name, o["side"], qty, mid, "resting", float(r.spot), snap_id, (o.get("note", "") + " maker@mid").strip()))
+        n += 1
+    return n
+
+
+def maker_fee(base: str, px: float, spot: float, qty: float, cs: float) -> float:
+    """Deribit maker fee: 0 for USDC-settled daily linear options (promo to 2027-01-31), else 3 bps capped at 12.5%."""
+    if base.endswith("_USDC"):
+        return 0.0
+    return float(min(COST_MODEL.fee_rel * spot, COST_MODEL.fee_cap * px)) * qty * cs
+
+
+def fill_resting(con=None, log=print) -> dict:
+    """Resolve resting maker orders from stored order books: first snapshot after placement (and before expiry)
+    where ask <= limit (buy) or bid >= limit (sell) fills the leg at the limit. Packages (same strategy, date, base)
+    fill all-or-nothing. Orders whose expiry passed without a crossing become status='unfilled'."""
+    con = con or store.connect()
+    now = int(time.time() * 1000)
+    rest = store.read(con, "SELECT o.*, i.base, i.expiration_ts, i.contract_size, i.inverse FROM paper_orders o JOIN instruments i USING (instrument_name) WHERE o.status='resting'")
+    filled = unfilled = pending = 0
+    if rest.empty:
+        return dict(filled=0, unfilled=0, pending=0)
+    for (strategy, date, base), pk in rest.groupby(["strategy", "date", "base"]):
+        legs = []
+        for _, o in pk.iterrows():
+            q = """SELECT s.snap_id, s.ts_ms, b.bid_px, b.ask_px, st.underlying_price FROM order_book b JOIN snapshots s USING (snap_id)
+                   LEFT JOIN inst_state st ON st.instrument_name=b.instrument_name AND st.snap_id=b.snap_id
+                   WHERE b.instrument_name=? AND b.level=0 AND s.ts_ms>? AND s.ts_ms<=? ORDER BY s.ts_ms"""
+            hist = store.read(con, q, (o.instrument_name, int(o.ts_ms), int(o.expiration_ts)))
+            conv = np.where(hist.inverse.values if "inverse" in hist else (o.inverse == 1), hist.underlying_price.fillna(o.spot).values, 1.0) if not hist.empty else None
+            cross = None
+            if not hist.empty:
+                conv = hist.underlying_price.fillna(o.spot).values if o.inverse == 1 else np.ones(len(hist))
+                px = (hist.ask_px.values if o.side == "buy" else hist.bid_px.values) * conv
+                ok = (px <= o.limit_px) if o.side == "buy" else (px >= o.limit_px)
+                ok = ok & np.isfinite(px)
+                if ok.any():
+                    i = int(np.argmax(ok)); cross = (int(hist.snap_id.iloc[i]), int(hist.ts_ms.iloc[i]))
+            legs.append((o, cross))
+        expired = now >= int(pk.expiration_ts.max())
+        if all(c is not None for _, c in legs):
+            for o, (sid, fts) in legs:
+                cs = o.contract_size or 1.0
+                fill_usd = float(o.qty) * float(o.limit_px) * cs
+                fee = maker_fee(base, float(o.limit_px), float(o.spot), float(o.qty), cs)
+                con.execute("UPDATE paper_orders SET status='filled', fill_px=?, fill_usd=?, fill_ts_ms=?, fee_usd=?, slippage_usd=0, levels_used=0, note=note||' filled@'||? WHERE order_id=?",
+                            (float(o.limit_px), fill_usd, fts, fee, store.utc_date(fts), int(o.order_id)))
+                con.execute("INSERT INTO paper_positions (strategy,instrument_name,side,qty,entry_px,entry_usd,entry_ts_ms,expiry_ts,spot_entry) VALUES (?,?,?,?,?,?,?,?,?)",
+                            (strategy, o.instrument_name, o.side, float(o.qty), float(o.limit_px), fill_usd, fts, int(o.expiration_ts), float(o.spot)))
+                filled += 1
+        elif expired:
+            for o, _ in legs:
+                con.execute("UPDATE paper_orders SET status='unfilled', note=note||' no crossing before expiry' WHERE order_id=?", (int(o.order_id),))
+                unfilled += 1
+        else:
+            pending += len(legs)
+    con.commit()
+    out = dict(filled=filled, unfilled=unfilled, pending=pending)
+    log(f"maker fills: {out}")
+    return out
+
+
 def current_nav(con, strategy, initial) -> float:
     r = con.execute("SELECT nav FROM paper_nav WHERE strategy=? ORDER BY date DESC LIMIT 1", (strategy,)).fetchone()
     return r[0] if r else initial
@@ -247,6 +325,12 @@ def trade(con=None, nav0=1_000_000.0, min_hours=6.0, max_hours=26.0, strategies=
             continue
         cash, n = 0.0, 0
         kept, blocked = gated_plan(con, name, p, chains, nav, date)
+        if p.get("maker"):
+            n = _rest(con, snap_id, ts, date, name, kept)
+            con.commit()
+            out[name] = dict(date=date, snap_id=snap_id, nav_before=nav, orders=0, resting=n, cash_flow_usd=0.0, bases=list(chains))
+            log(json.dumps(out[name]))
+            continue
         for o in kept:
             note = o["note"] + (f" edge_pkg={o['package_edge_usd']:.2f}" if "package_edge_usd" in o else "")
             cash += _place(con, snap_id, ts, date, name, o["row"], o["side"], o["usd"], note)
@@ -298,6 +382,7 @@ def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.Dat
 
 def settle(con=None, log=print) -> int:
     con = con or store.connect()
+    fill_resting(con, log)
     now = int(time.time() * 1000)
     pos = store.read(con, "SELECT p.*, i.option_type, i.strike, i.base, i.contract_size FROM paper_positions p JOIN instruments i USING (instrument_name) "
                           "WHERE p.settled=0 AND p.expiry_ts<=?", (now,))
