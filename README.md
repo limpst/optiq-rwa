@@ -102,6 +102,7 @@
 ### 저장 정책 · paper 첫 결과 (2026-11-23)
 
 - **저장 정책 (사용자 선택 2026-11-23)**: SQLite `data/optiq.db` 는 로컬에만 둔다 (gitignore). GitHub 에는 Parquet (zstd) 일별 파일 + results + docs 만 매일 commit (`scripts/publish_data.sh`). `book_summary` 는 만기 8일 이내 종목만 저장한다 (거래량 필터는 전 종목으로 계산한 뒤 집계만 보관). snapshot 1개 ≈ 0.65 MB (전: 1.4 MB). 과거 commit 에 남은 DB blob (12.5 · 59 MB) 은 history 에 그대로 있다.
+- **수집 간격 (2026-11-23 실측)**: 15분 launchd 작업이 이전 실행 (depth ~470 호출, 0.9 s/요청) 이 끝나기 전엔 새로 못 돌아 실제 간격 중앙값 23분. 4-thread 병렬은 요청당 0.71 s 로 빨라지지만 Deribit throttling 으로 40개 중 11개를 잃어 채택하지 않음 (`fetch_depth(workers=1)` 기본). 대시보드 수집 건강 카드는 실측 간격 기준.
 - **DB 잠금 버그 (2026-11-21 · 22 paper 주문 실패)**: 04:20 KST 작업이 snapshot 을 한 번 더 돌리는 동안 15분 snapshot 과 write lock 이 겹쳐 `database is locked`. 수정: snapshot 은 단계마다 commit, busy_timeout 60 s, daily 작업은 15분 snapshot 의 최신 호가만 쓴다.
 - **게이트 역산 (`paper/gate_view.py`, 2026-11-23)**: 지금 보정 (BTC m=1 콜 payback 0.82, se 0.16 → 하한 0.56) 으로는 매수 게이트가 열리려면 ask 가 약 60% 내려야 하고, 매도 (m=1.5) 는 bid 가 56~94% 올라야 한다. 모든 leg 가 막혀 있고, z=1.0 완화 쌍둥이 (`*_gated_z1`) 와 점추정으로도 열리지 않는다. 즉 지금 묶는 것은 z·se 가 아니라 **spread** (매수 ask 가 mid 보다 약 20% 높음) + 12.5% 수수료다. 매수 게이트가 열리려면 payback 하한이 (ask + fee)/mid ≈ 1.4 를 넘어야 한다. 대시보드 "실행 게이트가 열리려면" 표.
 - **라이브 spread 분포 (2026-11-20 ~ 23, snapshot 778개, 대시보드 "m≈1 콜 spread · 시간대별")**: 가장 가까운 만기 m≈1 콜의 (ask − bid)/mid 중앙값 BTC 21% (p10 14% · p90 40%), ETH 21%, BTC_USDC 25%, SOL_USDC 48%. 매수자는 mid 보다 BTC 10.5% · SOL 24% 비싸게 산다. 수수료 상한 12.5% 까지 더하면 BTC 매수 손익분기 payback ≈ 1.24. 가장 좁은 시간대 BTC 10:00 UTC · ETH 17:00 UTC (표본 3일, 참고만).
