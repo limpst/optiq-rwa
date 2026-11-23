@@ -35,6 +35,8 @@ from ..data import store
 from ..data.live import index_name_of, live_chain
 from . import gate as gate_mod
 
+WING_MAX_RATIO = 0.5      # cheap-wing twin: a protective wing may cost at most this fraction of the short leg's bid
+
 STRATEGIES = {
     "yield_calls": dict(m=1.0, budget_mult=1.0),
     "short_condor": dict(m=1.5, wing_m=2.5, frac=0.25),
@@ -54,6 +56,9 @@ STRATEGIES.update({f"{k}_maker": dict(v, base=k, maker=True) for k in ("yield_ca
 # intraday management twin: same condor, but the package is closed before expiry when the short legs' ask falls to
 # (1 - tp) x entry (take-profit) or rises to (1 + sl) x entry (stop-loss), at the first 15-min snapshot that crosses.
 STRATEGIES["short_condor_tp50"] = dict(STRATEGIES["short_condor"], base="short_condor", tp=0.5, sl=1.0)
+# cheap-wing twin: same condor, but a wing is bought only if its ask <= WING_MAX_RATIO x the short leg's bid (else the
+# base's package is skipped). Baseline condor is cost-blind so the two can be compared night by night.
+STRATEGIES["short_condor_cw"] = dict(STRATEGIES["short_condor"], base="short_condor", wing_max_ratio=WING_MAX_RATIO)
 TOL_M = 0.35          # accept strikes within this distance of the target m
 
 
@@ -78,6 +83,21 @@ def _nearest(chain: pd.DataFrame, kind: str, m_target: float, need: str = "both"
     return good.loc[(good.m - m_target).abs().idxmin()]
 
 
+def _cheap_wing(chain, kind, m_target, short_bid, max_ratio=WING_MAX_RATIO, tol=TOL_M, outward=2.0):
+    """Cheapest-acceptable wing: among strikes from (m_target - tol) outward to (m_target + outward) with an ask, the one
+    nearest the target whose ask <= max_ratio x short_bid. None when every candidate is too expensive."""
+    sign = 1.0 if m_target >= 0 else -1.0
+    sub = chain[(chain.kind == kind) & chain.ask.notna() & (chain.ask > 0)].copy()
+    if sub.empty or not np.isfinite(short_bid) or short_bid <= 0:
+        return None
+    d = (sub.m - m_target) * sign
+    sub = sub[(d >= -tol) & (d <= outward)]
+    sub = sub[sub.ask <= max_ratio * short_bid]
+    if sub.empty:
+        return None
+    return sub.loc[(sub.m - m_target).abs().idxmin()]
+
+
 def _contract_size(con, name) -> float:
     r = con.execute("SELECT contract_size, inverse, min_trade_amount FROM instruments WHERE instrument_name=?", (name,)).fetchone()
     return (r[0] or 1.0), bool(r[1]), (r[2] or 0.0)
@@ -99,11 +119,18 @@ def plan_orders(con, name, p, chains, nav, date=None) -> list[dict]:
     elif name == "short_condor" or (name == "regime_switch" and _regime_mode(con, date) == "sell"):
         m, wing, frac = (p.get("short_m", p.get("m")), p["wing_m"], p["frac"])
         per_leg = nav * frac / max(len(chains), 1)
+        wing_ratio = p.get("wing_max_ratio")             # None = cost-blind baseline (nearest wing by m); set on the *_cw twin
         for b, ch in chains.items():
-            legs = [("call", m, "sell"), ("put", -m, "sell"), ("call", wing, "buy"), ("put", -wing, "buy")]
-            rows = [(_nearest(ch, k, mm, need="bid" if side == "sell" else "ask", outward=0.0 if side == "sell" else 2.0), side) for k, mm, side in legs]
-            if any(r is None for r, _ in rows):
+            sc_, sp_ = _nearest(ch, "call", m, need="bid"), _nearest(ch, "put", -m, need="bid")
+            if sc_ is None or sp_ is None:
                 continue
+            if wing_ratio:
+                wc_, wp_ = _cheap_wing(ch, "call", wing, float(sc_.bid), wing_ratio), _cheap_wing(ch, "put", -wing, float(sp_.bid), wing_ratio)
+            else:
+                wc_, wp_ = _nearest(ch, "call", wing, need="ask", outward=2.0), _nearest(ch, "put", -wing, need="ask", outward=2.0)
+            rows = [(sc_, "sell"), (sp_, "sell"), (wc_, "buy"), (wp_, "buy")]
+            if any(r is None for r, _ in rows):
+                continue                                   # no acceptable wing: skip the package
             units = per_leg / float(ch.spot.iloc[0])
             for r, side in rows:
                 cs, _, _ = _contract_size(con, r.instrument_name)

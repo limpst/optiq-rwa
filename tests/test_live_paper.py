@@ -234,3 +234,19 @@ def test_stop_loss_ignores_ask_spike(con):
     assert res["sl"] == 1
     p = store.read(con, "SELECT * FROM paper_positions WHERE strategy='short_condor_tp50'").iloc[0]
     assert p.exit_reason == "sl" and p.exit_ts_ms == ts3 and np.isclose(p.exit_px, o.bid_px * 2.7) and p.pnl_usd < 0
+
+
+def test_condor_wing_must_be_cheap(con):
+    """Cheap-wing twin: wings costing more than wing_max_ratio x the short bid are rejected; baseline condor is cost-blind."""
+    from optiq_rwa.paper import engine as eng
+    from optiq_rwa.data.live import live_chain
+    ch = live_chain(con, 1, "SOL_USDC")                      # fixture strikes give m ~ 1.0 / 1.95 / 2.86 for calls
+    sc = eng._nearest(ch, "call", 1.0, need="bid")
+    assert sc is not None
+    assert eng._cheap_wing(ch, "call", 2.0, float(sc.bid), 0.5) is None          # every ask ~1.1 > 0.5 x bid 0.9
+    assert eng._cheap_wing(ch, "call", 2.0, float(sc.bid), 5.0) is not None
+    cfg = dict(eng.STRATEGIES["short_condor"], short_m=1.0, wing_m=2.0)
+    base_plan = eng.plan_orders(con, "short_condor", cfg, {"SOL_USDC": ch}, 100_000.0, "2026-11-23")
+    assert len(base_plan) == 4                                                    # cost-blind baseline sends the package
+    cw_plan = eng.plan_orders(con, "short_condor_cw", dict(cfg, base="short_condor", wing_max_ratio=0.5), {"SOL_USDC": ch}, 100_000.0, "2026-11-23")
+    assert cw_plan == []                                                          # cheap-wing twin skips it
