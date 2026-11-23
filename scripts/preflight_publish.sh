@@ -7,6 +7,7 @@ export PYTHONPATH=src
 PY="${OPTIQ_PY:-$HOME/dev/quantum/bin/python}"
 echo "[1/5] import"; "$PY" -c "import optiq_rwa.paper.engine as e, optiq_rwa.dashboard.app; assert len(e.STRATEGIES) >= 10, e.STRATEGIES; print('   strategies', len(e.STRATEGIES))"
 echo "[2/5] tests";  "$PY" -m pytest -q 2>&1 | tail -1 | tee /dev/stderr | grep -q " passed" 
+echo "[2b] report style"; "$PY" tools/probe_report_style.py --paths docs/REPORT_*.md 2>&1 | tail -1 | tee /dev/stderr | grep -q "위반 없음"
 echo "[3/5] export"; "$PY" scripts/export_dashboard.py
 echo "[4/5] data assertions + JS syntax"; "$PY" - <<'PYEOF'
 import json, pathlib, re, subprocess
