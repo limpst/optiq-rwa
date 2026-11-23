@@ -3,26 +3,26 @@
 Long overlay = m≈+1 call at ask (incl. fee), return per $ premium = payback − 1. Short overlay = m≈±1.5 strangle at bid (incl. fee), P&L per $ notional per leg. Labels are walk-forward (features use earlier nights only). regime_follow: rich_iv → sell strangle (frac 0.5), else buy calls with 3× accrual on event nights only.
 
 
-## BTC: 202 nights, labels {'rich_iv': 101, 'fair_iv': 57, 'base': 29, 'unknown': 8, 'events_underpriced': 7}
+## BTC: 205 nights, labels {'rich_iv': 104, 'fair_iv': 57, 'base': 29, 'unknown': 8, 'events_underpriced': 7}
 
 | coin   | label              |   nights |   long_n |   long_mean |   long_hit |   short_n |   short_mean |   short_worst |   short_hit |
 |:-------|:-------------------|---------:|---------:|------------:|-----------:|----------:|-------------:|--------------:|------------:|
 | BTC    | base               |       29 |       13 |     -0.3132 |     0.069  |         9 |       0.0005 |        0.0002 |      0.3103 |
 | BTC    | events_underpriced |        7 |        3 |     -1      |     0      |         5 |       0.0004 |        0.0001 |      0.7143 |
 | BTC    | fair_iv            |       57 |       33 |     -0.3903 |     0.0526 |        18 |       0.0004 |       -0.0012 |      0.2807 |
-| BTC    | rich_iv            |      101 |       73 |     -0.5331 |     0.0693 |        49 |       0.0001 |       -0.0103 |      0.4455 |
+| BTC    | rich_iv            |      104 |       76 |     -0.5516 |     0.0673 |        52 |       0.0002 |       -0.0103 |      0.4615 |
 | BTC    | unknown            |        8 |        5 |     -1      |     0      |         4 |       0.0003 |        0.0002 |      0.5    |
 
 ### BTC NAV paths (SR · IR · MDD · DSR; bold = highlight rule)
 
 | strategy          |   n_nights |   ann_return |   excess_vs_rwa |   sharpe |   ir_vs_rwa |   max_drawdown |   worst_night |      dsr |
 |:------------------|-----------:|-------------:|----------------:|---------:|------------:|---------------:|--------------:|---------:|
-| rwa_only          |        202 |       0.046  |          0.001  | nan      |    nan      |         0      |        0.0001 | nan      |
-| always_long_daily |        202 |       0.0312 |         -0.0138 |   8.167  |     -3.7763 |         0      |        0      |   0.0016 |
-| always_short      |        202 |       0.0552 |          0.0102 |   9.9978 |      1.634  |        -0.0025 |       -0.0025 |   0.2352 |
-| regime_follow     |        202 |       0.0457 |          0.0007 |   8.3733 |     -0.0517 |        -0.0025 |       -0.0025 |   0.0132 |
+| rwa_only          |        205 |       0.046  |          0.001  | nan      |    nan      |         0      |        0.0001 | nan      |
+| always_long_daily |        205 |       0.0308 |         -0.0142 |   8.0964 |     -3.9195 |         0      |        0      |   0.0009 |
+| always_short      |        205 |       0.058  |          0.013  |  10.293  |      2.0847 |        -0.0025 |       -0.0025 |   0.2605 |
+| regime_follow     |        205 |       0.0486 |          0.0036 |   8.7037 |      0.4569 |        -0.0025 |       -0.0025 |   0.0257 |
 
-- BTC: short strangle mean P&L per $ notional was +0.0001 on rich_iv nights (n=49) vs +0.0004 on other labelled nights (n=32). Long m=1 call return per $ was -0.533 on rich_iv vs -0.407 elsewhere. Label does not separate the sell edge.
+- BTC: short strangle mean P&L per $ notional was +0.0002 on rich_iv nights (n=52) vs +0.0004 on other labelled nights (n=32). Long m=1 call return per $ was -0.552 on rich_iv vs -0.407 elsewhere. Label does not separate the sell edge.
 
 ## SOL: 105 nights, labels {'rich_iv': 69, 'events_underpriced': 16, 'fair_iv': 11, 'unknown': 9}
 
