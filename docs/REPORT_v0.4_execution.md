@@ -16,6 +16,7 @@
 | 역선택 | 지정가 / 체결 순간 mid − 1. 양수면 그 순간의 공정가보다 비싸게 산 것 |
 | tp / sl | 목표 되사기 (ask 기준) / 손절 (mid 기준) |
 | cw | cheap-wing: wing ask ≤ short bid × 0.5 일 때만 condor 를 보냄 |
+| DSR | Deflated Sharpe Ratio. 탐색 수 · 비정규성 · 표본 길이로 보정한 Sharpe (v0.3 보고서) |
 
 ## 요약
 

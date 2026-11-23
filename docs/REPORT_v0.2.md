@@ -17,6 +17,9 @@
 | P(ITM) | 만기에 결제가가 strike 를 넘을 확률 |
 | NAV | paper 계좌 평가액 (USD) |
 | universe | 하루 option 거래량 10억 원 이상인 base |
+| QUBO | Quadratic Unconstrained Binary Optimization. Idea 2 의 이벤트 밤 선택 문제 형식 |
+| SA | Simulated Annealing. QUBO 를 푸는 확률적 탐색 |
+| MILP | Mixed-Integer Linear Programming. QUBO 의 정확해 solver |
 
 ## 요약
 

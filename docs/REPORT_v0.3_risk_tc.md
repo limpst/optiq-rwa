@@ -12,11 +12,14 @@
 | fee | Deribit option 체결 수수료 = min(기초자산 notional 0.03%, option 가격 12.5%) |
 | SR | Sharpe ratio, 0 대비, 연율 = mean(r)/sd(r)·√365 |
 | IR | information ratio, RWA 4.5% 대비 = (mean(r) − rwa/365)/sd(r)·√365 |
-| MDD | 최대 낙폭 |
+| MDD | Maximum Drawdown. 고점 대비 최대 낙폭 |
 | DSR | deflated Sharpe ratio (Bailey & López de Prado 2014). RWA 초과수익의 SR 이 같은 탐색 N 개 중 최대 기대 SR 을 넘을 확률 |
 | 하이라이트 | SR > 0 · IR > 0.5 · MDD ≥ −15% · DSR ≥ 0.95 · 60밤 이상 |
 | payback | 1달러 지불당 회수액 |
 | rich_iv | IV 가 실현 변동성보다 비싼 국면 라벨 |
+| QUBO | Quadratic Unconstrained Binary Optimization. Idea 2 의 이벤트 밤 선택 문제 형식 |
+| SA | Simulated Annealing. QUBO 를 푸는 확률적 탐색 |
+| MILP | Mixed-Integer Linear Programming. QUBO 의 정확해 solver |
 
 ## 요약
 
