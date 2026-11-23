@@ -121,6 +121,39 @@ def spread_grid(con, bases, max_snaps: int = 48) -> dict:
     return out
 
 
+def spread_by_hour(con, target_m: float = 1.0, tol: float = 0.5) -> dict:
+    """Median relative spread of the m~+1 call at the nearest expiry, per base and UTC hour, from every snapshot
+    with depth (order_book level 0). spread = (ask - bid) / mid; ask_over_mid = ask / mid - 1 (what a buyer pays)."""
+    q = """SELECT s.ts_ms, i.base, i.strike, i.expiration_ts, i.inverse, st.mark_iv, st.underlying_price, o.bid_px, o.ask_px
+           FROM order_book o JOIN snapshots s USING (snap_id) JOIN instruments i USING (instrument_name)
+           JOIN inst_state st ON st.instrument_name = o.instrument_name AND st.snap_id = o.snap_id
+           WHERE o.level = 0 AND i.option_type = 'call' AND o.bid_px IS NOT NULL AND o.ask_px IS NOT NULL AND o.ask_px > 0"""
+    df = store.read(con, q)
+    if df.empty:
+        return {}
+    df = df[df.expiration_ts > df.ts_ms]
+    df["hours"] = (df.expiration_ts - df.ts_ms) / 3.6e6
+    df = df[df.hours <= 30]
+    df = df.loc[df.groupby(["base", "ts_ms"]).expiration_ts.transform("min") == df.expiration_ts]
+    iv = (df.mark_iv.fillna(60) / 100).clip(lower=0.05)
+    df["m"] = np.log(df.strike / df.underlying_price) / (iv * np.sqrt(df.hours.clip(lower=0.1) / 8760))
+    df = df[(df.m - target_m).abs() <= tol]
+    df = df.loc[(df.m - target_m).abs().groupby([df.base, df.ts_ms]).idxmin()]
+    conv = np.where(df.inverse == 1, df.underlying_price, 1.0)
+    bid, ask = df.bid_px * conv, df.ask_px * conv
+    mid = (bid + ask) / 2
+    df["spread"] = (ask - bid) / mid
+    df["ask_over_mid"] = ask / mid - 1
+    df["hour"] = ((df.ts_ms // 3_600_000) % 24).astype(int)
+    out = {"by_hour": {}, "overall": {}, "n": int(len(df))}
+    for b, g in df.groupby("base"):
+        h = g.groupby("hour").agg(spread=("spread", "median"), ask_over_mid=("ask_over_mid", "median"), n=("spread", "size"), hours_to_expiry=("hours", "median")).reset_index()
+        out["by_hour"][b] = _records(h.round(4))
+        out["overall"][b] = {"spread_med": float(g.spread.median()), "spread_p10": float(g.spread.quantile(0.1)), "spread_p90": float(g.spread.quantile(0.9)),
+                             "ask_over_mid_med": float(g.ask_over_mid.median()), "n": int(len(g)), "best_hour": int(h.sort_values("spread").hour.iloc[0]) if len(h) else None}
+    return out
+
+
 def latest_chains(con) -> dict:
     snap = store.latest_snap_id(con)
     if snap is None:
@@ -266,6 +299,7 @@ def build_bundle(con=None) -> dict:
         "index_history": index_history(con),
         "candles": candles(con),
         "spread_grid": spread_grid(con, set(uni[uni.universe_pass == 1].base) | set(SETTINGS.focus_bases)),
+        "spread_by_hour": spread_by_hour(con),
         "iv_history": atm_iv_history(con),
         "chains": latest_chains(con),
         "paper": paper, "periods": periods, "sweep": sweep_rows, "perp": _records(perp.round(4)) if not perp.empty else [],

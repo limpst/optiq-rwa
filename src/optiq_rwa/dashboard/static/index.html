@@ -160,6 +160,7 @@ tr.extra{display:none} table.show-all tr.extra{display:table-row}
     <div class="panel"><p class="take" id="take-ch-nav"></p><div class="chart" id="ch-nav"></div><div class="legend" id="lg-nav"></div><p class="cap" data-t="cap_nav"></p></div>
     <div class="panel"><h3 data-t="h_periods"></h3><div class="ctl"><select id="sel-period"><option value="M">Monthly</option><option value="W">Weekly</option></select><select id="sel-strat"></select></div><p class="take" id="take-periods"></p><div class="tbl" id="periods"></div><p class="cap" data-t="cap_periods"></p></div>
   </div>
+  <div class="panel"><h3 data-t="h_sprh"></h3><p class="take" id="take-sprh"></p><div id="sprh"></div><p class="cap" data-t="cap_sprh"></p></div>
   <div class="panel"><h3 data-t="h_gate"></h3><p class="take" id="take-gate"></p><div class="tbl" id="gate"></div><p class="cap" data-t="cap_gate"></p></div>
   <div class="panel"><h3 data-t="h_preview"></h3><p class="take" id="take-preview"></p><div class="tbl" id="preview"></div><p class="cap" data-t="cap_preview"></p></div>
   <div class="panel"><h3 data-t="h_orders"></h3><p class="take" id="take-orders"></p><div class="tbl" id="orders"></div><p class="cap" data-t="cap_orders"></p></div>
@@ -264,6 +265,8 @@ const T = {
  h_universe:["Universe · 거래량 필터","Universe · volume filter"], cap_universe:["Deribit 24h option 거래량 (USD → 억 원). 10억 원 미만은 이슈 색. 미달 base 는 전략에서 빼고 focus base (SOL_USDC) 만 예외로 수집한다.","Deribit 24h option volume (USD → KRW 100M). Below KRW 1bn is flagged. Failing bases are excluded from strategies, except focus bases (SOL_USDC)."],
  h_paper:["Paper book (dry-run)","Paper book (dry-run)"], cap_nav:["전략별 paper NAV (USD). 열린 포지션은 0 으로 평가해 보수적이다.","Paper NAV per strategy (USD). Open positions carried at zero (conservative)."],
  h_periods:["기간별 수익","Period returns"], cap_periods:["주 · 월 단위 수익, RWA 대비 초과, 최대 낙폭. paper 전략은 NAV 가 2일 이상 쌓이면, 실데이터 backtest 전략 (base TC) 은 바로 보인다. 노란 셀 = 그 기간 손실.","Weekly / monthly return, excess over RWA, max drawdown. Paper strategies appear after 2+ days of NAV; real-backtest strategies (base TC) are available now. Yellow = loss in that period."],
+ h_sprh:["m≈1 콜 spread · 시간대별 (라이브 snapshot)","Spread of the m≈1 call by UTC hour (live snapshots)"],
+ cap_sprh:["세로 = (ask − bid)/mid 의 중앙값, 가로 = UTC 시각. 가장 가까운 만기의 m≈1 콜, snapshot 마다 1개. 선이 낮은 시간대가 사기 싸다. 19:20 UTC (paper 진입) 표시.","y = median (ask − bid)/mid, x = UTC hour. Nearest-expiry m≈1 call, one per snapshot. Low = cheap to trade. 19:20 UTC (paper entry) marked."],
  h_gate:["실행 게이트가 열리려면 (Idea 8 역산)","What it takes to open the execution gate (Idea 8)"],
  cap_gate:["게이트는 기대 결제가치 (보정 payback 의 단측 한계 × mid) 가 체결가 + 수수료를 넘어야 연다. payback 한계 = 점추정 ∓ z·se (z 1.645). '필요 가격 변화' = 지금 보정으로 게이트가 열리려면 ask 가 얼마나 내려야 (매수) · bid 가 얼마나 올라야 (매도) 하는가. 노란 셀 = 막힘.","The gate opens when expected settlement value (one-sided bound of calibrated payback × mid) exceeds fill price + fee. Bound = point estimate ∓ z·se (z 1.645). 'price move needed' = how far the ask must fall (buy) or the bid must rise (sell) at today's calibration. Yellow = blocked."],
  h_preview:["지금 주문한다면 (dry-run preview, 기록 안 함)","If we ordered now (dry-run preview, not recorded)"],
@@ -566,6 +569,9 @@ function render(){
   const drawPeriods=()=>{ const p=(allPeriods[ss.value]||{})[document.getElementById('sel-period').value]||[]; const neg=p.filter(r=>r.ret<0).length;
     setTake('periods', p.length?`${p.length}개 기간 중 손실 ${neg}개, 평균 ${pct(p.reduce((a,r)=>a+r.ret,0)/p.length,2)}.`:'', p.length?`${neg} of ${p.length} periods negative, mean ${pct(p.reduce((a,r)=>a+r.ret,0)/p.length,2)}.`:'', neg>p.length/2); document.getElementById('periods').innerHTML=p.length?table([{k:'period',h:'period'},{k:'n_days',h:'days',num:true},{k:'ret',h:'return',num:true,f:v=>pct(v,2),cls:r=>r.ret<0?'issue':''},{k:'excess',h:'vs RWA',num:true,f:v=>pct(v,2)},{k:'max_dd',h:'MDD',num:true,f:v=>pct(v,2)},{k:'worst_day',h:'worst day',num:true,f:v=>pct(v,2)}],p):`<p class="cap">${lang==='kr'?'NAV 가 2일 이상 쌓이면 표시.':'Shown once NAV spans 2+ days.'}</p>`; };
   ss.onchange=drawPeriods; document.getElementById('sel-period').onchange=drawPeriods; drawPeriods();
+  const sh=D.spread_by_hour||{}; document.getElementById('sprh').innerHTML=svgSpreadHour(sh);
+  const ov=sh.overall||{}; const ovB=ov.BTC||ov[Object.keys(ov)[0]]; const ovK=ov.BTC?'BTC':Object.keys(ov)[0];
+  setTake('sprh', ovB?`${ovK} m≈1 콜 spread 중앙값 ${pct(ovB.spread_med,0)} (p10 ${pct(ovB.spread_p10,0)} · p90 ${pct(ovB.spread_p90,0)}, n=${ovB.n}). 매수자는 mid 보다 ${pct(ovB.ask_over_mid_med,0)} 비싸게 산다. 가장 좁은 시간대 ${String(ovB.best_hour).padStart(2,'0')}:00 UTC.`:'depth 자료 없음.', ovB?`${ovK} m≈1 call median spread ${pct(ovB.spread_med,0)} (p10 ${pct(ovB.spread_p10,0)}, p90 ${pct(ovB.spread_p90,0)}, n=${ovB.n}). A buyer pays ${pct(ovB.ask_over_mid_med,0)} over mid. Tightest hour ${String(ovB.best_hour).padStart(2,'0')}:00 UTC.`:'No depth data.', ovB&&ovB.spread_med>0.2);
   const gt=(D.paper.gate||[]).filter(r=>!r.error); const gPass=gt.filter(r=>r.passes).length; const gMin=gt.length?Math.min(...gt.map(r=>Math.abs(r.px_move_pct))):null;
   const gZ1=gt.filter(r=>r.passes_z1).length, gPt=gt.filter(r=>r.passes_point).length; const spr=gt.filter(r=>r.side==='buy'&&r.mid>0).map(r=>r.px/r.mid-1); const sprMed=spr.length?spr.sort((a,b)=>a-b)[Math.floor(spr.length/2)]:null;
   setTake('gate', gt.length?`${gt.length}개 leg 중 열린 것: z=1.645 → ${gPass}, z=1.0 → ${gZ1}, 점추정 → ${gPt}. ${gPt===0?`점추정으로도 안 열리므로 원인은 z·se 가 아니라 spread (매수 ask 가 mid 보다 ${pct(sprMed,0)} 높음) + 12.5% 수수료다.`:'z 를 낮추면 일부 열린다.'}`:'게이트 계산 자료 없음.', gt.length?`Legs open of ${gt.length}: z=1.645 → ${gPass}, z=1.0 → ${gZ1}, point estimate → ${gPt}. ${gPt===0?`Closed even at the point estimate, so the binding cost is the spread (buy asks sit ${pct(sprMed,0)} above mid) plus the 12.5% fee, not z·se.`:'Lowering z opens some legs.'}`:'No gate data.', gPass===0);
@@ -669,6 +675,17 @@ function svgRegimeMonthly(rows){
     out+=s+'</svg>'; }
   out+=`<div class="legend">${labels.map(l=>`<span><i style="background:${colOf[l]}"></i>${l}</span>`).join('')}</div>`;
   return out;
+}
+function svgSpreadHour(sh){
+  const bases=Object.keys((sh||{}).by_hour||{}); if(!bases.length) return '<p class="cap">–</p>';
+  const W=560,H=230,L=48,R=14,Tp=14,B=36; const cols=palette(); let ymax=0; bases.forEach(b=>sh.by_hour[b].forEach(r=>{ ymax=Math.max(ymax,r.spread); })); ymax=Math.min(Math.ceil(ymax*10)/10||0.5, 1.5);
+  const X=hh=>L+hh/23*(W-L-R), Y=v=>Tp+(1-v/ymax)*(H-Tp-B); let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="spread by hour">`;
+  for(let v=0;v<=ymax+1e-9;v+=ymax/5) s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" class="mut" style="font-size:10px">${(v*100).toFixed(0)}%</text>`;
+  for(let hh=0;hh<=23;hh+=3) s+=`<text x="${X(hh)}" y="${H-14}" text-anchor="middle" class="mut" style="font-size:10px">${String(hh).padStart(2,'0')}</text>`;
+  s+=`<line x1="${X(19.33)}" x2="${X(19.33)}" y1="${Tp}" y2="${H-B}" stroke="var(--bad)" stroke-dasharray="4 3"/><text x="${X(19.33)+4}" y="${Tp+10}" style="font-size:10px;fill:var(--bad)">19:20 entry</text>`;
+  bases.forEach((b,i)=>{ const rows=sh.by_hour[b].slice().sort((a,c)=>a.hour-c.hour); const col=cols[i%cols.length]; let d=''; rows.forEach((r,j)=>{ d+=(j?'L':'M')+X(r.hour).toFixed(1)+' '+Y(Math.min(r.spread,ymax)).toFixed(1)+' '; });
+    s+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>`; rows.forEach(r=>{ s+=`<circle cx="${X(r.hour)}" cy="${Y(Math.min(r.spread,ymax))}" r="3" fill="${col}"><title>${b} ${String(r.hour).padStart(2,'0')}:00 UTC spread ${(r.spread*100).toFixed(0)}% · ask/mid−1 ${(r.ask_over_mid*100).toFixed(0)}% · n=${r.n} · ${r.hours_to_expiry.toFixed(1)}h to expiry</title></circle>`; }); });
+  s+='</svg>'; s+=`<div class="legend">${bases.map((b,i)=>`<span><i style="background:${cols[i%cols.length]}"></i>${b}</span>`).join('')}</div>`; return s;
 }
 function svgHeat(gd){
   if(!gd||!gd.cells.length) return `<p class="cap" style="padding:20px">${lang==='kr'?'depth 자료 없음 (universe · focus base 만 수집).':'No depth data (collected for universe and focus bases only).'}</p>`;
