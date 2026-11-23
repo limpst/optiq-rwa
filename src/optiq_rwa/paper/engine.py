@@ -9,6 +9,9 @@ settle at Deribit's delivery price for the expiry date (08:00 UTC).
 Strategies (same ideas as strategies.core, applied to one live chain):
   yield_calls    idea 1: spend NAV*rwa_rate/365*budget_mult on calls at m ~ +1.0 (per base, equal split)
   short_condor   idea 3: sell strangle at |m| ~ 1.5, buy wings at |m| ~ 2.5, `frac` of NAV notional
+  *_gated        idea 8: same plan as the base strategy, but each base's package is sent only when
+                 expected edge − (spread + fee) > 0 (paper.gate). Blocked packages are logged as status='gated'
+                 rows, so ungated vs gated NAV can be compared night by night.
 
 CLI (run from repo root; PYTHONPATH=src):
   python -m optiq_rwa.paper.engine trade  [--nav 1000000] [--min-hours 6] [--max-hours 26]
@@ -30,6 +33,7 @@ from ..backtest.costs import BASE as COST_MODEL
 from ..config import SETTINGS
 from ..data import store
 from ..data.live import index_name_of, live_chain
+from . import gate as gate_mod
 
 STRATEGIES = {
     "yield_calls": dict(m=1.0, budget_mult=1.0),
@@ -37,6 +41,8 @@ STRATEGIES = {
     # regime_switch: rich_iv -> short_condor legs, otherwise yield_calls only on event nights (risk.regime.classify_live)
     "regime_switch": dict(m=1.0, budget_mult=3.0, short_m=1.5, wing_m=2.5, frac=0.25),
 }
+# idea 8: gated twins (same parameters, execution-economics gate on)
+STRATEGIES.update({f"{k}_gated": dict(v, base=k, gate=True) for k, v in list(STRATEGIES.items())})
 TOL_M = 0.35          # accept strikes within this distance of the target m
 
 
@@ -69,6 +75,7 @@ def _contract_size(con, name) -> float:
 def plan_orders(con, name, p, chains, nav, date=None) -> list[dict]:
     """Pure planning: the orders a strategy would send on these chains at this NAV. No DB writes."""
     plan = []
+    name = p.get("base", name)
     if name == "yield_calls" or (name == "regime_switch" and _regime_mode(con, date) == "buy_events"):
         if name == "regime_switch" and not _is_event_day(date):
             return plan
@@ -95,6 +102,21 @@ def plan_orders(con, name, p, chains, nav, date=None) -> list[dict]:
 
 
 _REGIME_CACHE: dict = {}
+_PAYBACK: dict = {}
+
+
+def _payback_table() -> pd.DataFrame:
+    if "t" not in _PAYBACK:
+        _PAYBACK["t"] = gate_mod.load_payback()
+    return _PAYBACK["t"]
+
+
+def gated_plan(con, name, p, chains, nav, date) -> tuple[list[dict], list[dict]]:
+    """(orders to send, packages blocked by the gate). Ungated strategies block nothing."""
+    plan = plan_orders(con, name, p, chains, nav, date)
+    if not p.get("gate"):
+        return plan, []
+    return gate_mod.apply(plan, _payback_table(), _is_event_day(date))
 
 
 def _regime_mode(con, date) -> str:
@@ -221,11 +243,18 @@ def trade(con=None, nav0=1_000_000.0, min_hours=6.0, max_hours=26.0, strategies=
             log(f"{name}: no expiry within [{min_hours},{max_hours}]h for {bases}; nothing to do")
             continue
         cash, n = 0.0, 0
-        for o in plan_orders(con, name, p, chains, nav, date):
-            cash += _place(con, snap_id, ts, date, name, o["row"], o["side"], o["usd"], o["note"])
+        kept, blocked = gated_plan(con, name, p, chains, nav, date)
+        for o in kept:
+            note = o["note"] + (f" edge_pkg={o['package_edge_usd']:.2f}" if "package_edge_usd" in o else "")
+            cash += _place(con, snap_id, ts, date, name, o["row"], o["side"], o["usd"], note)
             n += 1
+        for o in blocked:
+            r = o["row"]
+            con.execute("INSERT INTO paper_orders (ts_ms,date,strategy,instrument_name,side,qty,limit_px,status,spot,snap_id,note) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (ts, date, name, r.instrument_name, o["side"], 0.0, float(r.ask if o["side"] == "buy" else r.bid), "gated", float(r.spot), snap_id,
+                         f"{o['note']} edge_pkg={o['package_edge_usd']:.2f} edge_leg={o['edge_usd']:.2f}"))
         con.commit()
-        out[name] = dict(date=date, snap_id=snap_id, nav_before=nav, orders=n, cash_flow_usd=round(cash, 2), bases=list(chains))
+        out[name] = dict(date=date, snap_id=snap_id, nav_before=nav, orders=n, gated=len(blocked), cash_flow_usd=round(cash, 2), bases=list(chains))
         log(json.dumps(out[name]))
     return out
 
@@ -248,7 +277,8 @@ def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.Dat
     rows = []
     for name, p in STRATEGIES.items():
         nav = current_nav(con, name, nav0)
-        for o in plan_orders(con, name, p, chains, nav, date):
+        kept, blocked = gated_plan(con, name, p, chains, nav, date)
+        for o in kept + blocked:
             r = o["row"]
             cs, _, min_amt = _contract_size(con, r.instrument_name)
             px = float(r.ask if o["side"] == "buy" else r.bid)
@@ -257,7 +287,9 @@ def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.Dat
                              px_usd=px, qty=o["usd"] / (px * cs) if px > 0 else np.nan, usd=o["usd"], hours=round(float(r.hours), 1),
                              spot=float(r.spot), quote_source=r.quote_source, min_trade_amount=min_amt,
                              fee_usd=w["fee_usd"], slippage_usd=w["slippage_usd"], levels_used=w["levels_used"], fill_vwap=w["vwap"],
-                             regime_mode=_regime_mode(con, date) if name == "regime_switch" else ""))
+                             regime_mode=_regime_mode(con, date) if p.get("base", name) == "regime_switch" else "",
+                             gate="" if not p.get("gate") else ("pass" if o in kept else "blocked"),
+                             edge_pkg_usd=o.get("package_edge_usd", np.nan)))
     return pd.DataFrame(rows)
 
 

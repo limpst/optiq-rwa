@@ -19,6 +19,15 @@
 | Deribit 수수료 (공식) | https://support.deribit.com/hc/en-us/articles/25944746248989-Fees |
 | 참고 사례 | [SOL daily call, LinkedIn](https://lnkd.in/p/gN5Us43k) |
 
+
+## 실시간 현황
+
+| 무엇 | 어디 | 갱신 |
+|---|---|---|
+| 라이브 수집 · paper NAV(게이트 전/후) · 현재 국면 · OOS walk-forward(전체 + 최근 30밤 DSR) | [`status` 브랜치](https://github.com/limpst/optiq-rwa/blob/status/README.md) | 매시간 (커밋 1개를 force-push, main 기록 무변경) |
+| 같은 내용의 일별 스냅샷 | [`docs/status.md`](docs/status.md) | 매일 17:30 KST settle 때 DB 와 함께 main 커밋 |
+| 실패 · 정지 알림 | macOS 알림 + `data/logs/alerts.log`, `.env` 의 `OPTIQ_ALERT_WEBHOOK` 이 있으면 Teams / Slack 으로 전송 | 단계 실패 즉시 · 수집 45분 정지 시 1회 |
+
 ---
 
 ## v0.2 — 라이브 데이터 · paper trading · 대시보드 (2026-11-20)
@@ -35,7 +44,11 @@
 | `src/optiq_rwa/backtest/periods.py` | 일 · 주 · 월 기간별 수익 · 초과 · MDD |
 | `src/optiq_rwa/dashboard/app.py` | FastAPI + TradingView lightweight-charts. `scripts/export_dashboard.py` 가 정적 `docs/index.html` 생성 |
 | `scripts/run_real_backtest.py` | `data/raw/*_chain.parquet` (Deribit 체결 이력) 로 Idea 1 · 3 · 4 backtest → `results/real/` |
-| `scripts/launchd/` | `com.optiq.snapshot` (900초) · `com.optiq.trade` (04:20 KST) · `com.optiq.settle` (17:30 KST, 결제 · NAV · export · DB commit) |
+| `scripts/launchd/` | `com.optiq.snapshot` (900초) · `com.optiq.readme` (3600초, `daily.sh status` → `status` 브랜치) · `com.optiq.trade` (04:20 KST) · `com.optiq.settle` (17:30 KST, 결제 · NAV · export · 라이브 체인 · OOS walk-forward 재계산 · `docs/status.md` · DB commit) |
+| `scripts/update_status.py` | `docs/status.md` 생성: 라이브 수집 현황 · paper NAV · 실행 게이트 전/후 비교 · 현재 국면 · OOS walk-forward 지표(전체 + 최근 30밤, 최근 구간 DSR 별도) |
+| `src/optiq_rwa/paper/gate.py` | 아이디어 8 실행 게이트: 기대 결제가치(아이디어 4 보정 payback × 라이브 mid) − ask/bid − 수수료 > 0 인 패키지만 진입. payback 은 점추정이 아니라 단측 하한(매수 payback − z·se, 매도 + z·se, z = `OPTIQ_GATE_Z` 기본 1.645)이고, 라이브 호가 밤이 쌓일수록 n_live / (n_live + 60) 가중으로 라이브 추정치 쪽으로 재보정. paper 엔진에 `*_gated` 쌍둥이 전략으로 적용, 보류는 `status='gated'` 로 기록 |
+| `src/optiq_rwa/data/livechain.py` | 라이브 호가(19:20 UTC snapshot, 실제 best bid/ask)로 매일 밤 체인 생성(BTC · ETH · SOL, ETH 는 라이브 전용) → `data/live/`. walk-forward 스크립트는 과거 체결 체인 + 라이브 밤을 이어 붙여 표본 외 구간을 매일 늘림 |
+| `scripts/notify.sh` | 스케줄 단계 실패 알림 (macOS 알림 · `alerts.log` · 선택: Teams / Slack webhook). 매시간 작업은 마지막 snapshot 이 45분 넘게 없으면 수집 정지로 보고 정지 1회당 한 번 알림 |
 
 ### Universe 필터 (하루 option 거래량 10억 원 이상, 2026-11-20 24h)
 
@@ -261,3 +274,43 @@ optiq-rwa/
 
 ## Contact
 - LinkedIn: [linkedin.com/in/hylee80](https://linkedin.com/in/hylee80)
+
+---
+
+## 아이디어 확장 (6~10): 실물 RWA 수익 × 데일리 옵션 오버레이 상호작용
+
+아이디어 1~5 는 옵션 쪽 성과를 하나씩 봅니다. 확장 아이디어 6~10 은 **두 슬리브가 서로 어떻게 맞물리는지**를 봅니다: 실물 RWA 수익 슬리브(토큰화 국채)가 옵션 슬리브에 예산과 담보를 공급하고, 옵션 손익이 다시 RWA 원금·예산으로 돌아가는 고리입니다.
+
+```
+ 실물 RWA 슬리브 (토큰화 국채, 원금 보존)
+   │  ① 이자 = 옵션 예산          ② 토큰 = 매도 증거금 (haircut 적용)
+   ▼                              ▼
+ 데일리(0DTE) 옵션 오버레이 ── 매수(아이디어 1·2) / 매도(아이디어 3)
+   │  ③ 실행 게이트: 기대이익 − TC > 0 인 밤에만 진입
+   ▼
+ 일일 손익 ── ④ 이익: 예산 적립 or 원금 재투자 / 손실: 예산 한도 내 흡수
+```
+
+> 표기: 이 섹션에서 위험가중 노출은 **RW 노출**로 씁니다 (RWA = 실물자산과 혼동 방지).
+
+| # | 아이디어 | 적용 위치 | 상호작용 질문 |
+|---|---|---|---|
+| 6 | **수익원 · 거래소 공통 인터페이스** | `data/` 아래 `Venue` 추상 클래스 + factory. `deribit.py` 를 첫 구현체로, 실물 RWA 수익원도 같은 스키마(노출, 수익률, 비용)로 정규화 | RWA 수익원 · 옵션 거래소를 바꿔 끼워도 전략 · 백테스트 코드가 그대로인가? |
+| 7 | **자본조정 수익 (슬리브별 RW 노출)** | `backtest/metrics.py`. 자본조정 수익 = 초과수익 ÷ Σ(노출 × 위험가중치). RWA 슬리브는 낮은 가중치, 옵션 매수는 프리미엄 100%, 매도는 최대손실 기준 | RWA 이자 1단위로 산 옵션(1)과 RWA 담보로 판 옵션(3) 중 자본 효율이 높은 쪽은? |
+| 8 | **실행 경제성 게이트** ✅ paper 적용 | `backtest/costs.py` · `paper/engine.py`. 아이디어 4 의 축소추정 기대이익 − TC(수수료 · spread · slippage) ≤ 0 이면 주문 보류, 예산은 다음 밤으로 이월 | 비용을 넘는 밤에만 쓰고 나머지 이자를 적립하면 SR · MDD 가 어떻게 바뀌나? |
+| 9 | **예산 · 담보 상호작용 패널** | `dashboard/`. 누적 이자 예산, 사용 · 이월 예산, 담보 haircut 후 매도 한도, 게이트 보류 건수 | RWA 금리 · haircut 이 바뀌면 옵션 운용 한도가 얼마나 움직이나? |
+| 10 | **국면 스트레스: 예산 소진 일수** | `risk/regime.py` 국면을 시나리오로 하룻밤 꼬리손실 Monte Carlo | 최악 국면에서 RWA 이자 예산이 옵션 손실을 몇 밤 버티고, 언제 원금을 건드리나? |
+
+### 다음 단계 (로드맵 반영 제안)
+- [x] Phase 6: 아이디어 8 게이트를 paper 엔진에 연결 (`paper/gate.py`, `*_gated` 쌍둥이 전략) — 전/후 비교는 실시간 현황 페이지
+- [ ] Phase 6: 아이디어 7 자본조정 수익을 `results/sweep_summary.csv` 열로 추가
+- [ ] Phase 7: 아이디어 6 인터페이스로 실물 RWA 수익률 시계열 연결 (기존 Phase 7 항목과 통합)
+- [ ] Phase 7: 아이디어 9 패널 · 아이디어 10 스트레스 테스트
+
+### 개선 제안
+1. **위험가중치 근거 표** — 슬리브별 가중치를 BCBS 암호자산 기준(SCO60)의 그룹 분류(1a/1b/2a/2b)와 토큰화 국채의 기초자산 기준으로 정하고 출처를 남길 것.
+2. **담보 haircut 실측** — RWA 토큰을 증거금으로 받는 거래소 · 프로토콜의 실제 haircut 과 금리 변화를 시계열로 붙여 아이디어 3 매도 한도를 동적으로 계산.
+3. **`Venue` 출력 스키마를 먼저 고정** — dataclass(venue_id, exposure, weight, yield_or_edge, tc, gate_pass)와 테스트(`tests/`)를 먼저 작성.
+4. **이익 처리 규칙 비교** — 옵션 이익을 (a) 예산 적립 (b) RWA 원금 재투자 (c) 절반씩 으로 나눠 sweep 해서 장기 NAV 비교.
+
+**더 깊이 들어갈 수 있는 지점:** 아이디어 7 의 RW 노출을 QUBO(아이디어 2) 제약으로 넣으면 "이자 예산 제약" 대신 "자본 소모 제약" 하의 이벤트 밤 선택 문제로 확장되고, 아이디어 9 의 담보 한도를 두 번째 제약으로 더해 매수 · 매도 혼합 선택까지 한 번에 풀 수 있습니다.

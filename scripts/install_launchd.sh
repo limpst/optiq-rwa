@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Install / reinstall the three launchd agents (snapshot 15 min, trade 04:20 KST, settle 17:30 KST).
+# Install / reinstall the launchd agents (snapshot 15 min, status hourly, trade 04:20 KST, settle 17:30 KST).
 # NOTE: launchd cannot read ~/Downloads, ~/Desktop or ~/Documents (macOS TCC). Keep the repo elsewhere (e.g. ~/dev).
 cd "$(dirname "$0")/.." || exit 1
 REPO=$(pwd)
