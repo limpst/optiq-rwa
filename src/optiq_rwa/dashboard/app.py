@@ -283,7 +283,16 @@ def build_bundle(con=None) -> dict:
                    "tp": v.get("tp"), "sl": v.get("sl"), "params": {kk: vv for kk, vv in v.items() if kk in ("m", "budget_mult", "short_m", "wing_m", "frac")}} for k, v in _S.items()]
     except Exception:
         roster = []
+    pos = store.read(con, "SELECT strategy, expiry_ts, pnl_usd, settled, exit_reason, side FROM paper_positions")
+    pnl_grid = {"dates": [], "strategies": [], "cells": []}
+    if not pos.empty:
+        pos["night"] = pos.expiry_ts.map(lambda v: store.utc_date(int(v)))
+        gsum = pos.groupby(["night", "strategy"]).agg(pnl=("pnl_usd", lambda x: float(np.nansum(x))), n=("pnl_usd", "size"), settled=("settled", "sum"),
+                                                    tp=("exit_reason", lambda x: int((x == "tp").sum())), sl=("exit_reason", lambda x: int((x == "sl").sum()))).reset_index()
+        pnl_grid = {"dates": sorted(gsum.night.unique().tolist()), "strategies": [k for k in roster_names if k in set(gsum.strategy)] if (roster_names := [r["name"] for r in roster]) else sorted(gsum.strategy.unique()),
+                    "cells": _records(gsum.round(2))}
     paper = {
+        "pnl_grid": pnl_grid,
         "roster": roster,
         "intraday": intr,
         "maker": maker,

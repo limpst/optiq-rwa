@@ -161,6 +161,7 @@ tr.extra{display:none} table.show-all tr.extra{display:table-row}
     <div class="panel"><h3 data-t="h_periods"></h3><div class="ctl"><select id="sel-period"><option value="M">Monthly</option><option value="W">Weekly</option></select><select id="sel-strat"></select></div><p class="take" id="take-periods"></p><div class="tbl" id="periods"></div><p class="cap" data-t="cap_periods"></p></div>
   </div>
   <div class="panel"><h3 data-t="h_sprh"></h3><p class="take" id="take-sprh"></p><div id="sprh"></div><p class="cap" data-t="cap_sprh"></p></div>
+  <div class="panel"><h3 data-t="h_pnlgrid"></h3><p class="take" id="take-pnlgrid"></p><div id="pnlgrid"></div><p class="cap" data-t="cap_pnlgrid"></p></div>
   <div class="panel"><h3 data-t="h_roster"></h3><p class="take" id="take-roster"></p><div class="tbl" id="roster"></div><p class="cap" data-t="cap_roster"></p></div>
   <div class="panel"><h3 data-t="h_intr"></h3><p class="take" id="take-intr"></p><div id="decay"></div><div class="tbl" id="intr"></div><p class="cap" data-t="cap_intr"></p></div>
   <div class="panel"><h3 data-t="h_maker"></h3><p class="take" id="take-maker"></p><div class="tbl" id="maker"></div><p class="cap" data-t="cap_maker"></p></div>
@@ -270,6 +271,8 @@ const T = {
  h_periods:["기간별 수익","Period returns"], cap_periods:["주 · 월 단위 수익, RWA 대비 초과, 최대 낙폭. paper 전략은 NAV 가 2일 이상 쌓이면, 실데이터 backtest 전략 (base TC) 은 바로 보인다. 노란 셀 = 그 기간 손실.","Weekly / monthly return, excess over RWA, max drawdown. Paper strategies appear after 2+ days of NAV; real-backtest strategies (base TC) are available now. Yellow = loss in that period."],
  h_sprh:["m≈1 콜 spread · 시간대별 (라이브 snapshot)","Spread of the m≈1 call by UTC hour (live snapshots)"],
  cap_sprh:["세로 = (ask − bid)/mid 의 중앙값, 가로 = UTC 시각. 가장 가까운 만기의 m≈1 콜, snapshot 마다 1개. 선이 낮은 시간대가 사기 싸다. 19:20 UTC (paper 진입) 표시.","y = median (ask − bid)/mid, x = UTC hour. Nearest-expiry m≈1 call, one per snapshot. Low = cheap to trade. 19:20 UTC (paper entry) marked."],
+ h_pnlgrid:["밤별 × 전략별 paper P&L (USD)","Paper P&L by night × strategy (USD)"],
+ cap_pnlgrid:["칸 = 그 밤 (만기 08:00 UTC 날짜) 에 결제된 포지션의 손익 합 (수수료 포함). 초록 = 이익, 빨강 = 손실, 회색 = 주문 없음 · 미결제. 숫자는 USD, 괄호는 포지션 수 (tp · sl 로 닫힌 수).","Cell = P&L of positions settled that night (expiry date, 08:00 UTC), fees included. Green = gain, red = loss, grey = no orders or still open. USD; brackets = positions (closed by tp · sl)."],
  h_roster:["오늘 밤 돌아가는 paper 전략","Paper strategies running tonight"],
  cap_roster:["04:20 KST (19:20 UTC) 에 같은 호가로 전부 주문한다. 쌍둥이는 같은 설정에 실행 규칙만 다르다: gated = Idea 8 게이트 (z=1.645), gated_z1 = 완화 게이트 (z=1.0), maker = mid 지정가 (체결 판정은 이후 snapshot), tp50 = 목표 50% 되사기 + mid 기준 손절 1배. 전략별 NAV 를 나란히 비교하는 것이 목적이다.","All are ordered at 04:20 KST (19:20 UTC) on the same quotes. Twins share parameters and differ only in execution: gated = idea-8 gate (z=1.645), gated_z1 = relaxed gate (z=1.0), maker = resting limit at mid (filled from later snapshots), tp50 = 50% take-profit plus a mid-based 1x stop. The point is to compare NAV paths side by side."],
  h_intr:["밤중 option 가격 경로 · intraday 매도 백필","Overnight option price path · intraday short backfill"],
@@ -578,6 +581,9 @@ function render(){
   const drawPeriods=()=>{ const p=(allPeriods[ss.value]||{})[document.getElementById('sel-period').value]||[]; const neg=p.filter(r=>r.ret<0).length;
     setTake('periods', p.length?`${p.length}개 기간 중 손실 ${neg}개, 평균 ${pct(p.reduce((a,r)=>a+r.ret,0)/p.length,2)}.`:'', p.length?`${neg} of ${p.length} periods negative, mean ${pct(p.reduce((a,r)=>a+r.ret,0)/p.length,2)}.`:'', neg>p.length/2); document.getElementById('periods').innerHTML=p.length?table([{k:'period',h:'period'},{k:'n_days',h:'days',num:true},{k:'ret',h:'return',num:true,f:v=>pct(v,2),cls:r=>r.ret<0?'issue':''},{k:'excess',h:'vs RWA',num:true,f:v=>pct(v,2)},{k:'max_dd',h:'MDD',num:true,f:v=>pct(v,2)},{k:'worst_day',h:'worst day',num:true,f:v=>pct(v,2)}],p):`<p class="cap">${lang==='kr'?'NAV 가 2일 이상 쌓이면 표시.':'Shown once NAV spans 2+ days.'}</p>`; };
   ss.onchange=drawPeriods; document.getElementById('sel-period').onchange=drawPeriods; drawPeriods();
+  const pg=D.paper.pnl_grid||{}; document.getElementById('pnlgrid').innerHTML=svgPnlGrid(pg);
+  const tot={}; (pg.cells||[]).forEach(c=>{ if(c.settled) tot[c.strategy]=(tot[c.strategy]||0)+c.pnl; }); const best=Object.entries(tot).sort((a,b)=>b[1]-a[1])[0], worst=Object.entries(tot).sort((a,b)=>a[1]-b[1])[0];
+  setTake('pnlgrid', best?`${(pg.dates||[]).length}밤 누적: 최고 ${best[0]} ${fmt(best[1],0)} USD · 최저 ${worst[0]} ${fmt(worst[1],0)} USD. 쌍둥이 비교는 같은 밤에 같이 돈 날부터 (11-24 밤 이후).`:'결제된 paper 포지션 없음.', best?`${(pg.dates||[]).length} nights: best ${best[0]} ${fmt(best[1],0)} USD, worst ${worst[0]} ${fmt(worst[1],0)} USD. Twin comparisons start with nights where all ran together (from 11-24).`:'No settled paper positions.', worst&&worst[1]<0);
   const ro=D.paper.roster||[]; const navLast={}; (D.paper.nav||[]).forEach(r=>navLast[r.strategy]=r);
   const rule=r=>{ const kr=lang==='kr'; const parts=[]; if(r.gate) parts.push(kr?`게이트 z=${r.gate_z||1.645}`:`gate z=${r.gate_z||1.645}`); if(r.maker) parts.push(kr?'mid 지정가 (maker)':'resting at mid (maker)'); if(r.tp) parts.push(kr?`목표 ${pct(r.tp,0)} · 손절 ${r.sl}배 (mid)`:`tp ${pct(r.tp,0)} · stop ${r.sl}x (mid)`); return parts.join(' · ')||(kr?'즉시 체결 (taker)':'cross the spread (taker)'); };
   setTake('roster', `${ro.length}개 전략 · 기본 ${ro.filter(r=>r.base===r.name).length} + 쌍둥이 ${ro.filter(r=>r.base!==r.name).length}. NAV 기록 ${Object.keys(navLast).length}개.`, `${ro.length} strategies: ${ro.filter(r=>r.base===r.name).length} base + ${ro.filter(r=>r.base!==r.name).length} twins. ${Object.keys(navLast).length} with a NAV record.`);
@@ -695,6 +701,19 @@ function svgRegimeMonthly(rows){
     out+=s+'</svg>'; }
   out+=`<div class="legend">${labels.map(l=>`<span><i style="background:${colOf[l]}"></i>${l}</span>`).join('')}</div>`;
   return out;
+}
+function svgPnlGrid(pg){
+  const ds=pg.dates||[], ss=pg.strategies||[]; if(!ds.length||!ss.length) return `<p class="cap">${lang==='kr'?'결제된 paper 포지션이 아직 없다.':'No settled paper positions yet.'}</p>`;
+  const cell={}; (pg.cells||[]).forEach(c=>cell[c.night+'|'+c.strategy]=c); const vmax=Math.max(1,...(pg.cells||[]).map(c=>Math.abs(c.pnl)));
+  const L=170,Tp=28,cw=Math.max(64,Math.min(110,(560-L)/ds.length)),chh=26; const W=L+cw*ds.length+10,H=Tp+chh*ss.length+8;
+  let s=`<div class="tbl"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,560)}px" role="img" aria-label="pnl grid">`;
+  ds.forEach((d,j)=>s+=`<text x="${L+j*cw+cw/2}" y="${Tp-10}" text-anchor="middle" class="mut" style="font-size:11px">${d.slice(5)}</text>`);
+  ss.forEach((st,i)=>{ s+=`<text x="${L-8}" y="${Tp+i*chh+chh/2+4}" text-anchor="end" style="font-size:11px">${st}</text>`;
+    ds.forEach((d,j)=>{ const c=cell[d+'|'+st]; const x=L+j*cw, y=Tp+i*chh; if(!c||!c.settled){ s+=`<rect x="${x+1}" y="${y+1}" width="${cw-2}" height="${chh-2}" rx="3" fill="var(--line)" opacity=".5"/>`; return; }
+      const col=c.pnl>=0?'var(--ok)':'var(--bad)'; const o=0.25+0.7*Math.min(1,Math.abs(c.pnl)/vmax);
+      s+=`<rect x="${x+1}" y="${y+1}" width="${cw-2}" height="${chh-2}" rx="3" fill="${col}" opacity="${o.toFixed(2)}"><title>${st} · ${d}: ${fmt(c.pnl,2)} USD · ${c.n} positions (tp ${c.tp}, sl ${c.sl})</title></rect>`;
+      s+=`<text x="${x+cw/2}" y="${y+chh/2+4}" text-anchor="middle" style="font-size:11px;font-family:var(--mono);fill:${o>0.6?'#fff':'var(--fg)'}">${(c.pnl>=0?'+':'')+fmt(c.pnl,0)} (${c.n}${(c.tp||c.sl)?` ${c.tp}·${c.sl}`:''})</text>`; }); });
+  return s+'</svg></div>';
 }
 function svgDecay(dc){
   const keys=Object.keys(dc||{}); if(!keys.length) return '<p class="cap">–</p>';
