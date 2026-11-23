@@ -390,8 +390,10 @@ def preview(con=None, nav0=1_000_000.0, min_hours=1.0, max_hours=30.0) -> pd.Dat
 
 def manage_positions(con=None, log=print) -> dict:
     """Take-profit / stop-loss for strategies with tp/sl: scan stored order books after entry; the first snapshot where the
-    short legs' total ask <= (1-tp) x entry (tp) or >= (1+sl) x entry (sl) closes the whole package (shorts bought at ask,
-    wings sold at bid, taker fees). Closed positions are marked settled with payoff_usd = exit cash flow."""
+    short legs' total ASK <= (1-tp) x entry (take-profit, judged on the price we would actually pay) or their total MID
+    >= (1+sl) x entry (stop-loss, judged on fair value so a one-sided ask spike on a wide-spread night cannot trigger it;
+    backfill 2026-11-23 showed ask-based stops turn +0.43/$ into -0.52/$) closes the whole package: shorts bought back at
+    ask, wings sold at bid, taker fees. Closed positions are marked settled with payoff_usd = exit cash flow."""
     con = con or store.connect()
     out = dict(tp=0, sl=0, open=0)
     names = [k for k, v in STRATEGIES.items() if v.get("tp") or v.get("sl")]
@@ -417,18 +419,24 @@ def manage_positions(con=None, log=print) -> dict:
                 frames = []
                 break
             conv = h.underlying_price.fillna(o.spot_entry).values if o.inverse == 1 else np.ones(len(h))
-            h["ask_usd"] = pd.to_numeric(h.ask_px, errors="coerce").values * conv * float(o.qty) * float(o.cs or 1.0)
-            frames.append(h[["snap_id", "ts_ms", "ask_usd"]].rename(columns={"ask_usd": o.instrument_name}))
+            a = pd.to_numeric(h.ask_px, errors="coerce").values * conv; b_ = pd.to_numeric(h.bid_px, errors="coerce").values * conv
+            units = float(o.qty) * float(o.cs or 1.0)
+            h["ask_usd"] = a * units
+            h["mid_usd"] = np.where(np.isfinite(a) & np.isfinite(b_), (a + b_) / 2, a) * units
+            frames.append(h[["snap_id", "ts_ms", "ask_usd", "mid_usd"]].rename(columns={"ask_usd": o.instrument_name, "mid_usd": o.instrument_name + "|mid"}))
         if not frames:
             out["open"] += len(pk); continue
         tot = frames[0]
         for f in frames[1:]:
             tot = tot.merge(f, on=["snap_id", "ts_ms"], how="inner")
         tot = tot.sort_values("ts_ms")
-        cost = tot.drop(columns=["snap_id", "ts_ms"]).sum(axis=1).values
+        ask_cols = [c for c in tot.columns if c not in ("snap_id", "ts_ms") and not c.endswith("|mid")]
+        mid_cols = [c for c in tot.columns if c.endswith("|mid")]
+        cost = tot[ask_cols].sum(axis=1).values            # what buying the shorts back would cost now (ask)
+        mid_cost = tot[mid_cols].sum(axis=1).values        # fair value now (mid): the stop is judged here, not on a one-sided ask spike
         entry_usd = float(shorts.entry_usd.sum())
         hit_tp = cost <= (1 - p["tp"]) * entry_usd if p.get("tp") else np.zeros(len(cost), bool)
-        hit_sl = cost >= (1 + p["sl"]) * entry_usd if p.get("sl") else np.zeros(len(cost), bool)
+        hit_sl = mid_cost >= (1 + p["sl"]) * entry_usd if p.get("sl") else np.zeros(len(cost), bool)
         hit = hit_tp | hit_sl
         if not hit.any():
             out["open"] += len(pk); continue

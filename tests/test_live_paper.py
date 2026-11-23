@@ -204,3 +204,33 @@ def test_take_profit_closes_package(con):
     p = store.read(con, "SELECT * FROM paper_positions WHERE strategy='short_condor_tp50'").iloc[0]
     assert p.settled == 1 and p.exit_reason == "tp" and p.exit_ts_ms == ts2 and np.isclose(p.exit_px, o.bid_px * 0.4)
     assert p.pnl_usd > 0 and np.isclose(p.pnl_usd, p.entry_usd - p.exit_usd - p.settle_fee_usd)
+
+
+def test_stop_loss_ignores_ask_spike(con):
+    """A one-sided ask spike (bid unchanged) must not trigger the stop; a real mid move must."""
+    from optiq_rwa.paper import engine as eng
+    o = store.read(con, "SELECT * FROM order_book WHERE snap_id=1 AND instrument_name='SOL_USDC-TEST-105-C' AND level=0").iloc[0]
+    ts1 = int(store.read(con, "SELECT ts_ms FROM snapshots WHERE snap_id=1").ts_ms.iloc[0])
+    exp = int(store.read(con, "SELECT expiration_ts FROM instruments WHERE instrument_name='SOL_USDC-TEST-105-C'").expiration_ts.iloc[0])
+    con.execute("INSERT INTO paper_positions (strategy,instrument_name,side,qty,entry_px,entry_usd,entry_ts_ms,expiry_ts,spot_entry) VALUES (?,?,?,?,?,?,?,?,?)",
+                ("short_condor_tp50", "SOL_USDC-TEST-105-C", "sell", 10.0, o.bid_px, 10.0 * o.bid_px, ts1, exp, 100.0))
+    ts2 = ts1 + 3_600_000
+    con.execute("INSERT INTO snapshots (snap_id, ts_ms, date) VALUES (2, ?, ?)", (ts2, store.utc_date(ts2)))
+    con.execute("INSERT INTO order_book VALUES (2, 'SOL_USDC-TEST-105-C', 0, ?, 5, ?, 5)", (o.bid_px, o.bid_px * 5.0))      # ask spike only: mid = 3x entry? bid same -> mid = (1+5)/2 = 3x
+    con.execute("INSERT INTO inst_state (snap_id, instrument_name, underlying_price) VALUES (2, 'SOL_USDC-TEST-105-C', 100.0)")
+    con.commit()
+    # mid = (bid + 5 bid)/2 = 3 x bid >= 2 x entry -> this IS a mid move; make the spike narrower: ask = 2.5 bid -> mid 1.75x < 2x
+    con.execute("UPDATE order_book SET ask_px=? WHERE snap_id=2", (o.bid_px * 2.5,))
+    con.commit()
+    res = eng.manage_positions(con, log=lambda *_: None)
+    assert res["sl"] == 0 and res["open"] == 1
+    # now a real move: bid and ask both up -> mid 2.5x entry -> stop
+    ts3 = ts2 + 3_600_000
+    con.execute("INSERT INTO snapshots (snap_id, ts_ms, date) VALUES (3, ?, ?)", (ts3, store.utc_date(ts3)))
+    con.execute("INSERT INTO order_book VALUES (3, 'SOL_USDC-TEST-105-C', 0, ?, 5, ?, 5)", (o.bid_px * 2.3, o.bid_px * 2.7))
+    con.execute("INSERT INTO inst_state (snap_id, instrument_name, underlying_price) VALUES (3, 'SOL_USDC-TEST-105-C', 100.0)")
+    con.commit()
+    res = eng.manage_positions(con, log=lambda *_: None)
+    assert res["sl"] == 1
+    p = store.read(con, "SELECT * FROM paper_positions WHERE strategy='short_condor_tp50'").iloc[0]
+    assert p.exit_reason == "sl" and p.exit_ts_ms == ts3 and np.isclose(p.exit_px, o.bid_px * 2.7) and p.pnl_usd < 0
