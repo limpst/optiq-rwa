@@ -258,20 +258,25 @@ def fill_resting(con=None, log=print) -> dict:
             cross = None
             if not hist.empty:
                 conv = hist.underlying_price.fillna(o.spot).values if o.inverse == 1 else np.ones(len(hist))
-                px = (hist.ask_px.values if o.side == "buy" else hist.bid_px.values) * conv
+                px = pd.to_numeric(hist.ask_px if o.side == "buy" else hist.bid_px, errors="coerce").values * conv
                 ok = (px <= o.limit_px) if o.side == "buy" else (px >= o.limit_px)
                 ok = ok & np.isfinite(px)
                 if ok.any():
-                    i = int(np.argmax(ok)); cross = (int(hist.snap_id.iloc[i]), int(hist.ts_ms.iloc[i]))
+                    i = int(np.argmax(ok))
+                    bb, aa = pd.to_numeric(hist.bid_px, errors="coerce").values[i], pd.to_numeric(hist.ask_px, errors="coerce").values[i]
+                    mid_fill = float((bb + aa) / 2 * conv[i]) if (np.isfinite(bb) and np.isfinite(aa)) else float(px[i])
+                    cross = (int(hist.snap_id.iloc[i]), int(hist.ts_ms.iloc[i]), mid_fill)
             legs.append((o, cross))
         expired = now >= int(pk.expiration_ts.max())
         if all(c is not None for _, c in legs):
-            for o, (sid, fts) in legs:
+            for o, (sid, fts, mid_fill) in legs:
                 cs = o.contract_size or 1.0
                 fill_usd = float(o.qty) * float(o.limit_px) * cs
                 fee = maker_fee(base, float(o.limit_px), float(o.spot), float(o.qty), cs)
-                con.execute("UPDATE paper_orders SET status='filled', fill_px=?, fill_usd=?, fill_ts_ms=?, fee_usd=?, slippage_usd=0, levels_used=0, note=note||' filled@'||? WHERE order_id=?",
-                            (float(o.limit_px), fill_usd, fts, fee, store.utc_date(fts), int(o.order_id)))
+                # adverse selection: a buy fills when the market's mid has fallen to/below our limit -> we pay limit - mid_fill above the then-fair value
+                adverse = (float(o.limit_px) - mid_fill) if o.side == "buy" else (mid_fill - float(o.limit_px))
+                con.execute("UPDATE paper_orders SET status='filled', fill_px=?, fill_usd=?, fill_ts_ms=?, fee_usd=?, slippage_usd=?, levels_used=0, fill_mid=?, note=note||' filled@'||? WHERE order_id=?",
+                            (float(o.limit_px), fill_usd, fts, fee, adverse * float(o.qty) * cs, mid_fill, store.utc_date(fts), int(o.order_id)))
                 con.execute("INSERT INTO paper_positions (strategy,instrument_name,side,qty,entry_px,entry_usd,entry_ts_ms,expiry_ts,spot_entry) VALUES (?,?,?,?,?,?,?,?,?)",
                             (strategy, o.instrument_name, o.side, float(o.qty), float(o.limit_px), fill_usd, fts, int(o.expiration_ts), float(o.spot)))
                 filled += 1

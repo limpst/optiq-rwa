@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS volume_daily (date TEXT, base TEXT, volume_usd REAL, 
     n_listed INTEGER, universe_pass INTEGER, PRIMARY KEY (date, base));
 CREATE TABLE IF NOT EXISTS paper_orders (order_id INTEGER PRIMARY KEY AUTOINCREMENT, ts_ms INTEGER, date TEXT,
     strategy TEXT, instrument_name TEXT, side TEXT, qty REAL, limit_px REAL, status TEXT, fill_px REAL,
-    fill_usd REAL, fill_ts_ms INTEGER, spot REAL, snap_id INTEGER, note TEXT,
+    fill_usd REAL, fill_ts_ms INTEGER, spot REAL, snap_id INTEGER, note TEXT, fill_mid REAL,
     fee_usd REAL, slippage_usd REAL, levels_used INTEGER);
 CREATE TABLE IF NOT EXISTS paper_positions (pos_id INTEGER PRIMARY KEY AUTOINCREMENT, strategy TEXT,
     instrument_name TEXT, side TEXT, qty REAL, entry_px REAL, entry_usd REAL, entry_ts_ms INTEGER,
@@ -71,6 +71,9 @@ def connect(path: pathlib.Path | str | None = None) -> sqlite3.Connection:
 
 
 def _migrate(con: sqlite3.Connection) -> None:
+    ocols = {r[1] for r in con.execute("PRAGMA table_info(paper_orders)")}
+    if "fill_mid" not in ocols:
+        con.execute("ALTER TABLE paper_orders ADD COLUMN fill_mid REAL")     # mid at the moment a resting order fills (adverse selection)
     cols = {r[1] for r in con.execute("PRAGMA table_info(instruments)")}
     if "min_trade_amount" not in cols:
         con.execute("ALTER TABLE instruments ADD COLUMN min_trade_amount REAL")

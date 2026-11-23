@@ -52,12 +52,18 @@ for date, g in snaps.groupby("date"):
                 px = (hist.ask_px.values if o["side"] == "buy" else hist.bid_px.values) * conv if not hist.empty else np.array([])
                 ok = ((px <= r.mid) if o["side"] == "buy" else (px >= r.mid)) & np.isfinite(px) if len(px) else np.array([], bool)
                 t_fill = (int(hist.ts_ms.iloc[int(np.argmax(ok))]) - ts) / 3.6e6 if ok.any() else np.nan
+                if ok.any():
+                    i = int(np.argmax(ok)); bb, aa = pd.to_numeric(hist.bid_px, errors="coerce").values[i], pd.to_numeric(hist.ask_px, errors="coerce").values[i]
+                    mid_fill = float(((bb + aa) / 2 if np.isfinite(bb) and np.isfinite(aa) else px[i] / conv[i]) * conv[i])
+                    adverse_pct = (r.mid / mid_fill - 1) if (o["side"] == "buy" and mid_fill > 0) else ((mid_fill / r.mid - 1) if r.mid > 0 else np.nan)
+                else:
+                    mid_fill, adverse_pct = np.nan, np.nan
                 d = store.utc_date(int(r.expiration_ts))
                 dp = con.execute("SELECT price FROM delivery_price WHERE index_name=? AND date=?", (index_name_of(base), d)).fetchone()
                 payoff = (max(dp[0] - r.strike, 0) if r.kind == "call" else max(r.strike - dp[0], 0)) if dp else np.nan
                 leg_rows.append(dict(date=date, strategy=name, base=base, instrument=r.instrument_name, side=o["side"], m=round(float(r.m), 2),
                                      mid=float(r.mid), ask=float(r.ask), bid=float(r.bid), n_snaps=len(hist), crossed=bool(ok.any()),
-                                     hours_to_fill=t_fill, payoff=payoff, payback_mid=(payoff / r.mid) if (dp and r.mid > 0) else np.nan))
+                                     hours_to_fill=t_fill, fill_mid=mid_fill, adverse_pct=adverse_pct, payoff=payoff, payback_mid=(payoff / r.mid) if (dp and r.mid > 0) else np.nan))
             pkg = all(l["crossed"] for l in leg_rows) if leg_rows else False
             for l in leg_rows:
                 l["package_filled"] = pkg
@@ -70,11 +76,12 @@ if df.empty:
     lines.append("no nights with a 19:20 UTC snapshot and a 6-26h expiry yet")
 else:
     summ = df.groupby(["strategy", "side"]).agg(legs=("crossed", "size"), leg_fill=("crossed", "mean"), pkg_fill=("package_filled", "mean"),
-                                                 hours_to_fill=("hours_to_fill", "median"), payback_mid_filled=("payback_mid", lambda x: x[df.loc[x.index, "crossed"]].mean())).reset_index()
+                                                 hours_to_fill=("hours_to_fill", "median"), adverse_pct=("adverse_pct", "median"), payback_mid_filled=("payback_mid", lambda x: x[df.loc[x.index, "crossed"]].mean())).reset_index()
     lines.append(summ.round(3).to_markdown(index=False))
     byb = df[df.strategy == "yield_calls"].groupby("base").agg(nights=("crossed", "size"), fill=("crossed", "mean"), h=("hours_to_fill", "median")).reset_index()
     lines.append("\n## yield_calls (m~1 call buy at mid) by base\n")
     lines.append(byb.round(2).to_markdown(index=False))
     lines.append("\n## nights\n")
-    lines.append(df[["date", "strategy", "base", "side", "m", "mid", "ask", "crossed", "hours_to_fill", "package_filled", "payback_mid"]].round(3).to_markdown(index=False))
+    lines.append("\nadverse_pct = (our limit / mid at fill − 1) for buys: how far above the then-fair mid we paid; sells mirrored.\n")
+    lines.append(df[["date", "strategy", "base", "side", "m", "mid", "ask", "crossed", "hours_to_fill", "fill_mid", "adverse_pct", "package_filled", "payback_mid"]].round(3).to_markdown(index=False))
 (out / "maker_backfill.md").write_text("\n".join(lines)); print("\n".join(lines[:12]))
