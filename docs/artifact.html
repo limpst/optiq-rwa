@@ -706,7 +706,7 @@ function svgRegimeMonthly(rows){
 function svgPnlGrid(pg){
   const ds=pg.dates||[], ss=pg.strategies||[]; if(!ds.length||!ss.length) return `<p class="cap">${lang==='kr'?'결제된 paper 포지션이 아직 없다.':'No settled paper positions yet.'}</p>`;
   const cell={}; (pg.cells||[]).forEach(c=>cell[c.night+'|'+c.strategy]=c); const vmax=Math.max(1,...(pg.cells||[]).map(c=>Math.abs(c.pnl)));
-  const L=170,Tp=28,cw=Math.max(64,Math.min(110,(560-L)/ds.length)),chh=26; const W=L+cw*ds.length+10,H=Tp+chh*ss.length+8;
+  const L=170,Tp=28,cw=Math.max(96,Math.min(140,(600-L)/ds.length)),chh=26; const W=L+cw*ds.length+10,H=Tp+chh*ss.length+8;
   let s=`<div class="tbl"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,560)}px" role="img" aria-label="pnl grid">`;
   ds.forEach((d,j)=>s+=`<text x="${L+j*cw+cw/2}" y="${Tp-10}" text-anchor="middle" class="mut" style="font-size:11px">${d.slice(5)}</text>`);
   ss.forEach((st,i)=>{ s+=`<text x="${L-8}" y="${Tp+i*chh+chh/2+4}" text-anchor="end" style="font-size:11px">${st}</text>`;
@@ -716,7 +716,8 @@ function svgPnlGrid(pg){
         if(lab) s+=`<text x="${x+cw/2}" y="${y+chh/2+4}" text-anchor="middle" class="mut" style="font-size:10.5px">${lab}</text>`; return; }
       const col=c.pnl>=0?'var(--ok)':'var(--bad)'; const o=0.25+0.7*Math.min(1,Math.abs(c.pnl)/vmax);
       s+=`<rect x="${x+1}" y="${y+1}" width="${cw-2}" height="${chh-2}" rx="3" fill="${col}" opacity="${o.toFixed(2)}"><title>${st} · ${d}: ${fmt(c.pnl,2)} USD net (gross ${fmt(c.pnl_gross??c.pnl,2)}, fees ${fmt(c.fee||0,2)}) · ${c.n} positions (tp ${c.tp}, sl ${c.sl})</title></rect>`;
-      s+=`<text x="${x+cw/2}" y="${y+chh/2+4}" text-anchor="middle" style="font-size:11px;font-family:var(--mono);fill:${o>0.6?'#fff':'var(--fg)'}">${(c.pnl>=0?'+':'')+fmt(c.pnl,0)} (${c.n}${(c.tp||c.sl)?` ${c.tp}·${c.sl}`:''})</text>`; }); });
+      const feeTxt=(c.fee&&Math.abs(c.fee)>=0.5)?` −fee ${fmt(c.fee,0)}`:'';
+      s+=`<text x="${x+cw/2}" y="${y+chh/2+4}" text-anchor="middle" style="font-size:11px;font-family:var(--mono);fill:${o>0.6?'#fff':'var(--fg)'}">${(c.pnl>=0?'+':'')+fmt(c.pnl,0)} (${c.n}${(c.tp||c.sl)?` ${c.tp}·${c.sl}`:''})<tspan style="font-size:9px;opacity:.85">${feeTxt}</tspan></text>`; }); });
   return s+'</svg></div>';
 }
 function svgDecay(dc){
