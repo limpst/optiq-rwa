@@ -334,6 +334,13 @@ const G = { // glossary: term -> [kr, en]
  "Parquet":["열 단위 압축 파일. 분석용 일별 사본.","Columnar compressed files: daily analysis copies."],
  "walk-forward":["과거만 보고 모형을 맞추고 다음 구간에서 평가하는 방식.","Fit on the past only, evaluate on the next window."],
  "OOS":["Out-Of-Sample. 모형을 맞출 때 쓰지 않은 구간.","Out-of-sample: data not used for fitting."],
+ "게이트":["Idea 8 실행 게이트. 기대 결제가치 (보정 payback 의 단측 한계 × mid) 가 체결가 + 수수료를 넘는 패키지만 주문한다.","Idea-8 execution gate: order only when expected settlement value (one-sided bound of calibrated payback × mid) exceeds fill price + fee."],
+ "maker":["mid 에 지정가를 걸어 두고, 이후 snapshot 에서 시장이 그 가격을 통과하면 체결로 보는 paper 규칙. USDC 데일리 option 은 maker 수수료 0.","Resting limit at mid, filled when a later snapshot trades through it. USDC daily options carry 0 maker fee."],
+ "역선택":["지정가 / 체결 순간 mid − 1. 양수면 체결 순간의 공정가보다 비싸게 산 것. maker 체결의 숨은 비용.","limit / mid at fill − 1. Positive = paid above the fair value at the moment of the fill; the hidden cost of maker fills."],
+ "tp / sl":["take-profit / stop-loss. 목표 되사기는 실제 지불하는 ask 로, 손절은 공정가 mid 로 판단한다 (ask 스파이크 면역).","Take-profit on the ask actually paid, stop-loss on the mid (immune to one-sided ask spikes)."],
+ "cheap-wing":["condor 의 보호 wing 을 ask ≤ short bid × 0.5 일 때만 사는 규칙. 아니면 그 base 패키지를 보내지 않는다.","Buy the condor's protective wing only if its ask ≤ 0.5 × the short leg's bid; otherwise skip that base's package."],
+ "pegged":["15분 snapshot 마다 지정가를 그 시각 mid 로 다시 거는 maker 변형.","Maker variant that re-rests the limit at the current mid every 15-minute snapshot."],
+ "preflight":["발행 전 게이트: import · 테스트 · 보고서 문체 · export · 데이터 단언 · JS 문법 · 서버 응답을 모두 통과해야 발행한다.","Pre-publish gate: import, tests, report style, export, data assertions, JS syntax and server health must all pass."],
 };
 const N = [["S","spot (index) price at entry","USD"],["K","strike","USD"],["S_T","settlement (delivery) price at 08:00 UTC","USD"],["h","hours to expiry","h"],["IV","implied volatility, annualised","1/yr"],["σ√T","one-night standard move","fraction of S"],["m","moneyness in σ√T units","-"],["ask, bid","best ask / bid, USD per unit of underlying","USD"],["payoff","max(S_T−K,0) call, max(K−S_T,0) put","USD"],["r_rwa","RWA yield","1/yr"],["NAV_t","paper NAV on day t","USD"],["e_i, v_i","expected buy edge and variance of candidate i","per $ premium"],["λ, ρ, P","variance, same-night and budget penalty weights","-"],["K (QUBO)","units per week","count"],["x_i","buy candidate i (1) or not (0)","{0,1}"]];
 
@@ -782,7 +789,7 @@ const tip=document.getElementById('tip');
 function bindTips(){ document.querySelectorAll('dfn[data-g]').forEach(el=>{ el.onmouseenter=e=>{ tip.textContent=g(el.dataset.g)||el.dataset.g; tip.hidden=false; place(e); }; el.onmousemove=place; el.onmouseleave=()=>tip.hidden=true; el.onfocus=el.onmouseenter; el.onblur=el.onmouseleave; el.tabIndex=0; }); }
 function place(e){ const x=Math.min(e.clientX+12, innerWidth-330), y=e.clientY+16; tip.style.left=x+'px'; tip.style.top=(y+120>innerHeight?e.clientY-tip.offsetHeight-10:y)+'px'; }
 // wrap glossary terms in static copy once
-function autoDfn(){ document.querySelectorAll('h2,h3,p.cap,[data-t^="p_"]').forEach(el=>{ let h=el.innerHTML; for(const k of ['σ√T','QUBO','0DTE','RWA','IV','payback','ITM','NAV','MDD','Sharpe','iron condor','strangle','VWAP','universe','snapshot','paper','launchd','SQLite','perp']){ const re=new RegExp(`(?<![\\w<"'-])${k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![\\w>"'-])`); if(re.test(h)&&!h.includes(`data-g="${k}"`)) h=h.replace(re,`<dfn data-g="${k==='paper'?'paper trading':k}">${k}</dfn>`);} el.innerHTML=h; }); bindTips(); }
+function autoDfn(){ document.querySelectorAll('h2,h3,p.cap,[data-t^="p_"]').forEach(el=>{ let h=el.innerHTML; for(const k of ['σ√T','QUBO','0DTE','RWA','IV','payback','ITM','NAV','MDD','Sharpe','iron condor','strangle','VWAP','universe','snapshot','paper','launchd','SQLite','perp','게이트','maker','역선택','cheap-wing','pegged','preflight']){ const re=new RegExp(`(?<![\\w<"'-])${k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![\\w>"'-])`); if(re.test(h)&&!h.includes(`data-g="${k}"`)) h=h.replace(re,`<dfn data-g="${k==='paper'?'paper trading':k}">${k}</dfn>`);} el.innerHTML=h; }); bindTips(); }
 initDetails();
 if (D===null) { fetch('/api/all').then(r=>{ if(!r.ok) throw new Error('no api'); return r.json(); }).catch(()=>fetch('data.json').then(r=>r.json())).then(j=>{ D=j; render(); autoDfn(); }).catch(e=>{ document.getElementById('issues').innerHTML=`<div class="issue-box">data.json / api 를 불러오지 못했습니다: ${e}</div>`; }); } else { render(); autoDfn(); }
 </script>
