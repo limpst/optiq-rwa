@@ -249,7 +249,12 @@ def collector_health(con, expected_per_day: int = 96, gap_min: int = 30) -> dict
         if b - a > gap_min * 60_000:
             gaps.append({"from": dt.datetime.fromtimestamp(a / 1000, dt.timezone.utc).strftime("%m-%d %H:%M"), "minutes": int((b - a) / 60_000)})
     last_age = int((now - ts[-1]) / 60_000) if len(ts) else None
-    return {"n_24h": int(len(ts)), "expected": expected_per_day, "coverage": float(len(ts) / expected_per_day), "gaps": gaps[-8:],
+    # the 15-min job cannot start a new run while the previous (~2-3 min, up to ~470 depth calls) is still running, so the
+    # realised cadence is longer than 15 min; coverage is judged against the realised median interval, not 96/day
+    med = float(np.median(np.diff(ts)) / 60_000) if len(ts) > 2 else 15.0
+    expected = int(round(1440 / max(med, 1.0)))
+    return {"n_24h": int(len(ts)), "expected": expected, "expected_nominal": expected_per_day, "median_interval_min": round(med, 1),
+            "coverage": float(len(ts) / expected) if expected else None, "gaps": gaps[-8:],
             "minutes_since_last": last_age, "stalled": bool(last_age is not None and last_age > 45)}
 
 
