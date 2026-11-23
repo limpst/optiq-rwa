@@ -1,20 +1,25 @@
 # OptiQ-RWA 실시간 현황
 
-자동 생성: 2026-11-21 14:43 KST · `scripts/update_status.py` (매시간 `status` 브랜치, 매일 17:30 KST main). 손으로 고치지 마세요.
+자동 생성: 2026-11-23 13:16 KST · `scripts/update_status.py` (매시간 `status` 브랜치, 매일 17:30 KST main). 손으로 고치지 마세요.
 
 ### 라이브 수집 (Deribit 공개 API, 15분 주기)
 
 | 항목 | 값 |
 |---|---|
-| snapshot 수 (전체 / 최근 24h) | 12 / 12 |
-| 기간 (KST) | 2026-11-20 14:24 → 2026-11-20 17:30 |
-| index BTC | 61,942.15 USD |
-| index ETH | 1,755.15 USD |
-| universe 통과 (2026-11-20) | BTC, ETH, BTC_USDC |
+| snapshot 수 (전체 / 최근 24h) | 175 / 66 |
+| 기간 (KST) | 2026-11-20 14:24 → 2026-11-23 13:15 |
+| 마지막 snapshot 경과 | 1분 |
+| index BTC | 61,267.58 USD |
+| index ETH | 1,730.72 USD |
+| universe 통과 (2026-11-23) | BTC, ETH, BTC_USDC |
 
 ### Paper trading (실시간 표본 외, dry-run)
 
-결제된 NAV 기록 없음 (주문 0건). 첫 settle(17:30 KST) 이후 채워집니다.
+| 전략 | 일수 | 최근 | NAV | 누적 | MDD | 미결제 |
+|---|---|---|---|---|---|---|
+| regime_switch | 2 | 2026-11-23 | 1,000,537 | +0.02% | 0.00% | 0 |
+| short_condor | 2 | 2026-11-23 | 1,000,537 | +0.02% | 0.00% | 0 |
+| yield_calls | 2 | 2026-11-23 | 1,000,412 | +0.02% | 0.00% | 0 |
 
 ### 현재 국면 (walk-forward 라벨, 과거 밤만 사용)
 

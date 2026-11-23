@@ -369,6 +369,10 @@ function buildGlance(){
     [kr?'지금 국면':'Regime now', live.length?`rich_iv ${rich}/${live.length}`:'–', kr?'IV 가 실현 변동성보다 비쌈 → 매도 쪽':'IV above realised → sell side', false],
     [kr?'수수료 (프리미엄 1달러당)':'Fee per $1 premium', fee!=null?fmt(fee,3)+' $':'–', kr?'12.5% 상한이 걸림 (0DTE 는 싸서)':'12.5% cap binds (cheap 0DTE)', fee!=null&&fee>0.05],
     [kr?'라이브 snapshot':'Live snapshots', String(st_.n_snapshots||0), (st_.first_date||'')+' → '+((st_.last_snapshot||{}).date||''), (st_.n_snapshots||0)<96],
+    (()=>{ const nv=D.paper.nav||[]; const last={}; nv.forEach(r=>last[r.strategy]=r); const pairs=Object.keys(last).filter(k=>k.endsWith('_gated')&&last[k.slice(0,-6)]);
+      const gatedOrders=(D.paper.orders||[]).filter(r=>r.status==='gated').length;
+      if(pairs.length){ const k=pairs[0], b=k.slice(0,-6); const d=last[k].nav-last[b].nav; return [kr?'게이트 전/후 (Idea 8)':'Gate off/on (Idea 8)', (d>=0?'+':'')+fmt(d,0)+' USD', `${b}: ${fmt(last[b].nav,0)} → ${fmt(last[k].nav,0)}`, d<0]; }
+      return [kr?'실행 게이트 (Idea 8)':'Execution gate (Idea 8)', gatedOrders?String(gatedOrders):'0', kr?'차단된 패키지 수 · 기대이익 − TC ≤ 0':'blocked packages · expected edge − TC ≤ 0', false]; })(),
     [kr?'다음 확정 이벤트':'Next confirmed event', ev?ev.event:'–', ev?`${ev.date} ${ev.time_utc} UTC${evU?` · (${kr?'미확정':'unconfirmed'}: ${evU.event} ${evU.date})`:''}`:'', false],
   ];
   document.getElementById('gcards').innerHTML=cards.map(c=>`<div class="gcard"><div class="k">${c[0]}</div><div class="v ${c[3]?'issue':''}" style="${c[3]?'padding:0 6px;border-radius:6px':''}">${c[1]}</div><div class="d">${c[2]}</div></div>`).join('');

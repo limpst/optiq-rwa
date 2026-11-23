@@ -45,7 +45,7 @@ case "$1" in
       blob=$(git hash-object -w docs/status.md) \
         && tree=$(printf '100644 blob %s\tREADME.md\n' "$blob" | git mktree) \
         && c=$(git commit-tree "$tree" -m "status $(date -u +%Y-%m-%dT%H:%MZ)") \
-        && git push -q -f origin "$c:refs/heads/status" >> $LOG 2>&1 || FAILED+=("push-status")
+        && git push -q -f origin "${c}:refs/heads/status" >> $LOG 2>&1 || FAILED+=("push-status")
     fi
     ;;
   *) echo "usage: daily.sh trade|settle|status"; exit 2;;
