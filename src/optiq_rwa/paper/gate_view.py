@@ -49,6 +49,8 @@ def thresholds(con=None, min_hours: float = 1.0, max_hours: float = 30.0) -> pd.
                 continue
             fee = float(g.COST_MODEL.fee(px / r.spot)) * float(r.spot)
             fee_rate = fee / px
+            pb_b1 = max(pb - 1.0 * se, 0.0) if side == "buy" else pb + 1.0 * se      # relaxed twin (z = 1)
+            edge_z1 = (pb_b1 * mid - px - fee) if side == "buy" else (px - fee - pb_b1 * mid)
             if side == "buy":
                 pb_b = max(pb - g.GATE_Z * se, 0.0)
                 pb_req = (px + fee) / mid
@@ -62,7 +64,8 @@ def thresholds(con=None, min_hours: float = 1.0, max_hours: float = 30.0) -> pd.
             rows.append(dict(base=b, side=side, kind=kind, m=round(float(r.m), 2), instrument_name=r.instrument_name, hours=round(float(r.hours), 1),
                              mid=mid, px=px, fee=fee, fee_rate=fee_rate, payback=pb, se=se, z=g.GATE_Z, payback_bound=pb_b, payback_required=pb_req,
                              gap=pb_b - pb_req if side == "buy" else pb_req - pb_b, px_required=px_req,
-                             px_move_pct=(px_req / px - 1.0), edge_per_unit=edge, passes=bool(edge > 0)))
+                             px_move_pct=(px_req / px - 1.0), edge_per_unit=edge, passes=bool(edge > 0),
+                             payback_bound_z1=pb_b1, passes_z1=bool(edge_z1 > 0), passes_point=bool(((pb * mid - px - fee) if side == "buy" else (px - fee - pb * mid)) > 0)))
     return pd.DataFrame(rows)
 
 

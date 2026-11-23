@@ -41,8 +41,11 @@ STRATEGIES = {
     # regime_switch: rich_iv -> short_condor legs, otherwise yield_calls only on event nights (risk.regime.classify_live)
     "regime_switch": dict(m=1.0, budget_mult=3.0, short_m=1.5, wing_m=2.5, frac=0.25),
 }
-# idea 8: gated twins (same parameters, execution-economics gate on)
+# idea 8: gated twins (same parameters, execution-economics gate on). z = one-sided bound on the calibrated payback:
+#   *_gated     z = GATE_Z (1.645, 5% quantile)   conservative
+#   *_gated_z1  z = 1.0 (16% quantile)            relaxed twin, to measure how much the bound costs
 STRATEGIES.update({f"{k}_gated": dict(v, base=k, gate=True) for k, v in list(STRATEGIES.items())})
+STRATEGIES.update({f"{k}_gated_z1": dict(v, base=k, gate=True, gate_z=1.0) for k, v in list(STRATEGIES.items()) if not v.get("gate")})
 TOL_M = 0.35          # accept strikes within this distance of the target m
 
 
@@ -116,7 +119,7 @@ def gated_plan(con, name, p, chains, nav, date) -> tuple[list[dict], list[dict]]
     plan = plan_orders(con, name, p, chains, nav, date)
     if not p.get("gate"):
         return plan, []
-    return gate_mod.apply(plan, _payback_table(), _is_event_day(date))
+    return gate_mod.apply(plan, _payback_table(), _is_event_day(date), z=p.get("gate_z"))
 
 
 def _regime_mode(con, date) -> str:
