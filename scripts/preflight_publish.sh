@@ -2,6 +2,7 @@
 # Pre-publish gate: import, tests, dashboard export, data assertions, JS syntax, server health. Exit non-zero = do not publish.
 set -e
 cd "$(dirname "$0")/.." || exit 1
+NOSERVER=0; [ "$1" = "--no-server" ] && NOSERVER=1       # daily.sh settle uses steps 1-4 only
 export PYTHONPATH=src
 PY="${OPTIQ_PY:-$HOME/dev/quantum/bin/python}"
 echo "[1/5] import"; "$PY" -c "import optiq_rwa.paper.engine as e, optiq_rwa.dashboard.app; assert len(e.STRATEGIES) >= 10, e.STRATEGIES; print('   strategies', len(e.STRATEGIES))"
@@ -24,6 +25,7 @@ for k in ("h_glance", "h_regime", "h_live", "h_paper", "h_eq", "h_real", "h_swee
     assert f'data-t="{k}"' in h, f"section {k} missing"
 print("   data ok: snapshots", d["status"]["n_snapshots"], "roster", len(d["paper"]["roster"]), "artifact", round(pathlib.Path("docs/artifact.html").stat().st_size/1e3), "KB")
 PYEOF
+if [ "$NOSERVER" = "1" ]; then echo "PREFLIGHT OK (no server step)"; exit 0; fi
 echo "[5/5] server"; pkill -f "uvicorn optiq_rwa.dashboard" || true; sleep 1
 (nohup "$PY" -m uvicorn optiq_rwa.dashboard.app:app --port 8793 --log-level warning > data/logs/dashboard.log 2>&1 &)
 for i in 1 2 3 4 5 6 7 8 9 10; do code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8793/ || true); [ "$code" = "200" ] && break; sleep 2; done

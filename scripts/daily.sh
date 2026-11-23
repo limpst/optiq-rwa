@@ -24,7 +24,7 @@ case "$1" in
     step settle     "$PY" -m optiq_rwa.paper.engine settle
     step nav        "$PY" -m optiq_rwa.paper.engine nav
     step export     "$PY" -m optiq_rwa.data.live export
-    step dashboard  "$PY" scripts/export_dashboard.py
+    step dashboard  /bin/zsh scripts/preflight_publish.sh --no-server   # export + assertions (import, tests, data, JS); fails loudly instead of committing a broken page
     step livechain  "$PY" -m optiq_rwa.data.livechain build          # live order-book nights -> data/live/
     step regime     "$PY" scripts/run_regime.py                      # walk-forward labels (past nights only)
     step validation "$PY" scripts/run_regime_validation.py           # OOS walk-forward NAV / SR / IR / MDD / DSR
