@@ -289,8 +289,18 @@ def build_bundle(con=None) -> dict:
         pos["night"] = pos.expiry_ts.map(lambda v: store.utc_date(int(v)))
         gsum = pos.groupby(["night", "strategy"]).agg(pnl=("pnl_usd", lambda x: float(np.nansum(x))), n=("pnl_usd", "size"), settled=("settled", "sum"),
                                                     tp=("exit_reason", lambda x: int((x == "tp").sum())), sl=("exit_reason", lambda x: int((x == "sl").sum()))).reset_index()
-        pnl_grid = {"dates": sorted(gsum.night.unique().tolist()), "strategies": [k for k in roster_names if k in set(gsum.strategy)] if (roster_names := [r["name"] for r in roster]) else sorted(gsum.strategy.unique()),
-                    "cells": _records(gsum.round(2))}
+        # orders that produced no position: gated (idea 8 blocked), unfilled (maker never crossed), resting (maker still waiting)
+        ords = store.read(con, "SELECT o.date, o.strategy, o.status, i.expiration_ts FROM paper_orders o JOIN instruments i USING (instrument_name) WHERE o.status IN ('gated','unfilled','resting','rejected')")
+        if not ords.empty:
+            ords["night"] = ords.expiration_ts.map(lambda v: store.utc_date(int(v)))
+            oc = ords.groupby(["night", "strategy", "status"]).size().unstack(fill_value=0).reset_index()
+            gsum = gsum.merge(oc, on=["night", "strategy"], how="outer").fillna({"pnl": 0.0, "n": 0, "settled": 0, "tp": 0, "sl": 0})
+            for c in ("gated", "unfilled", "resting", "rejected"):
+                if c not in gsum:
+                    gsum[c] = 0
+        roster_names = [r["name"] for r in roster]
+        strats = [k for k in roster_names if k in set(gsum.strategy)] + sorted(set(gsum.strategy) - set(roster_names))
+        pnl_grid = {"dates": sorted(gsum.night.unique().tolist()), "strategies": strats, "cells": _records(gsum.round(2))}
     paper = {
         "pnl_grid": pnl_grid,
         "roster": roster,
