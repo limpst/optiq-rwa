@@ -240,6 +240,19 @@ def regime_block(con) -> dict:
     return out
 
 
+def collector_health(con, expected_per_day: int = 96, gap_min: int = 30) -> dict:
+    """Last 24h: snapshots vs expected (every 15 min), gaps longer than gap_min, minutes since the last snapshot."""
+    now = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
+    ts = store.read(con, "SELECT ts_ms FROM snapshots WHERE ts_ms > ? ORDER BY ts_ms", (now - 86_400_000,)).ts_ms.values
+    gaps = []
+    for a, b in zip(ts[:-1], ts[1:]):
+        if b - a > gap_min * 60_000:
+            gaps.append({"from": dt.datetime.fromtimestamp(a / 1000, dt.timezone.utc).strftime("%m-%d %H:%M"), "minutes": int((b - a) / 60_000)})
+    last_age = int((now - ts[-1]) / 60_000) if len(ts) else None
+    return {"n_24h": int(len(ts)), "expected": expected_per_day, "coverage": float(len(ts) / expected_per_day), "gaps": gaps[-8:],
+            "minutes_since_last": last_age, "stalled": bool(last_age is not None and last_age > 45)}
+
+
 def build_bundle(con=None) -> dict:
     con = con or store.connect()
     counts = store.table_counts(con)
@@ -339,7 +352,8 @@ def build_bundle(con=None) -> dict:
         "config": {"min_daily_volume_krw": SETTINGS.min_daily_volume_krw, "usdkrw": SETTINGS.usdkrw, "rwa_rate": SETTINGS.rwa_rate,
                    "focus_bases": list(SETTINGS.focus_bases), "db": str(SETTINGS.db_path.relative_to(ROOT))},
         "status": {"counts": counts, "last_snapshot": _records(last)[0] if not last.empty else None,
-                   "n_snapshots": counts.get("snapshots", 0), "first_date": store.read(con, "SELECT MIN(date) d FROM snapshots").d.iloc[0]},
+                   "n_snapshots": counts.get("snapshots", 0), "first_date": store.read(con, "SELECT MIN(date) d FROM snapshots").d.iloc[0],
+                   "health": collector_health(con)},
         "universe": _records(uni.round(2)),
         "volume_history": _records(vol_hist.round(0)),
         "index_history": index_history(con),
