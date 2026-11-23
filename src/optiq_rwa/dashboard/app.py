@@ -266,7 +266,19 @@ def build_bundle(con=None) -> dict:
                                                  hours_to_fill=("hours_to_fill", "median"), adverse_pct=("adverse_pct", "median"),
                                                  payback_mid_filled=("payback_mid", lambda x: float(np.nanmean(x[mk.loc[x.index, "crossed"]])) if mk.loc[x.index, "crossed"].any() else np.nan)).reset_index()
         maker["summary"] = _records(sm.round(3))
+    intr = {"rules": [], "by_base": [], "decay": {}}
+    ib = read_csv(RESULTS / "intraday_backfill.csv")
+    if not ib.empty:
+        sm = ib.groupby("rule").agg(legs=("pnl_per_prem", "size"), mean=("pnl_per_prem", "mean"), median=("pnl_per_prem", "median"), worst=("pnl_per_prem", "min"),
+                                     hit=("pnl_per_prem", lambda x: float((x > 0).mean())), closed=("closed", "mean"), exit_h=("exit_hours", "median")).reset_index()
+        intr["rules"] = _records(sm.round(4))
+        intr["nights"] = int(ib.date.nunique())
+    dc = read_csv(RESULTS / "intraday_decay_curve.csv")
+    if not dc.empty:
+        for (b, k), g in dc.groupby(["base", "kind"]):
+            intr["decay"][f"{b}|{k}"] = [{"h": float(r.hours), "r": float(r.ratio)} for r in g.sort_values("hours").itertuples()]
     paper = {
+        "intraday": intr,
         "maker": maker,
         "gate": gate_rows,
         "preview": prev,
