@@ -64,6 +64,7 @@ def connect(path: pathlib.Path | str | None = None) -> sqlite3.Connection:
     con = sqlite3.connect(p, timeout=60)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
+    con.execute("PRAGMA busy_timeout=60000")
     con.executescript(SCHEMA)
     _migrate(con)
     return con
@@ -122,15 +123,27 @@ def export_parquet(con: sqlite3.Connection, date: str | None = None, out_dir: pa
             if df.empty:
                 continue
             f = out / f"{t}_{d}.parquet"
-            df.to_parquet(f, index=False)
+            df.to_parquet(f, index=False, compression="zstd")
             written.append(str(f))
     for t in ("instruments", "delivery_price", "volume_daily", "paper_orders", "paper_positions", "paper_nav"):
         df = read(con, f"SELECT * FROM {t}")
         if not df.empty:
             f = out / f"{t}.parquet"
-            df.to_parquet(f, index=False)
+            df.to_parquet(f, index=False, compression="zstd")
             written.append(str(f))
     return written
+
+
+def prune_summary(con: sqlite3.Connection, max_days: float = 8.0, vacuum: bool = True) -> int:
+    """Delete book_summary rows whose expiry was more than `max_days` after the snapshot time (storage policy 2026-11-23)."""
+    n = con.execute("""DELETE FROM book_summary WHERE rowid IN (
+                         SELECT b.rowid FROM book_summary b JOIN instruments i USING (instrument_name) JOIN snapshots s USING (snap_id)
+                         WHERE i.expiration_ts - s.ts_ms > ? )""", (max_days * 86_400_000,)).rowcount
+    con.commit()
+    if vacuum:
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        con.execute("VACUUM")
+    return n
 
 
 def table_counts(con: sqlite3.Connection) -> dict:

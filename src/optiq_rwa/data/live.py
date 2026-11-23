@@ -159,12 +159,19 @@ def fetch_delivery(bases, count=10) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------------ main entry
-def snapshot(con=None, depth=5, max_expiries=2, max_abs_m=2.5, log=print) -> dict:
+def snapshot(con=None, depth=5, max_expiries=2, max_abs_m=2.5, log=print, summary_max_days: float = 8.0) -> dict:
+    """One collection run. Writes are committed per stage so the 15-min job never holds a write lock for
+    the whole ~100 s run (the paper engine and the dashboard share this file).
+
+    summary_max_days: keep book_summary rows only for expiries within this many days (volume filter still
+    uses every listed option before the cut). 8 days ~ halves storage. None = keep all."""
     con = con or store.connect()
+    con.execute("PRAGMA busy_timeout=60000")
     t0, ts = time.time(), now_ms()
     date = store.utc_date(ts)
     cur = con.execute("INSERT INTO snapshots (ts_ms, date) VALUES (?, ?)", (ts, date))
     snap_id = cur.lastrowid
+    con.commit()
     inst = fetch_instruments(ts)
     # keep first_seen from the existing row
     seen = store.read(con, "SELECT instrument_name, first_seen_ms FROM instruments")
@@ -173,9 +180,14 @@ def snapshot(con=None, depth=5, max_expiries=2, max_abs_m=2.5, log=print) -> dic
         inst["first_seen_ms"] = inst.first_seen_ms_old.fillna(inst.first_seen_ms).astype("int64")
         inst = inst.drop(columns="first_seen_ms_old")
     store.insert_df(con, "instruments", inst)
+    con.commit()
     summ = fetch_summaries(snap_id)
+    vol = volume_table(summ, date)                      # volume filter on every listed option
+    if summary_max_days is not None:
+        near = set(inst[inst.expiration_ts <= ts + summary_max_days * 86_400_000].instrument_name)
+        summ = summ[summ.instrument_name.isin(near)]
     store.insert_df(con, "book_summary", summ)
-    vol = volume_table(summ, date)
+    con.commit()
     # volume_usd from Deribit is a rolling 24h figure -> keep the daily max
     old = store.read(con, "SELECT base, volume_usd FROM volume_daily WHERE date=?", (date,))
     if not old.empty:
@@ -186,11 +198,13 @@ def snapshot(con=None, depth=5, max_expiries=2, max_abs_m=2.5, log=print) -> dic
     store.insert_df(con, "volume_daily", vol)
     bases = sorted(set(vol.base))
     store.insert_df(con, "index_price", fetch_index_prices(snap_id, bases))
+    con.commit()
     depth_bases = set(vol[vol.universe_pass == 1].base) | set(SETTINGS.focus_bases)
     picked = pick_depth_instruments(inst, summ, depth_bases, ts, max_expiries, max_abs_m)
     ob, st = fetch_depth(snap_id, picked.instrument_name.tolist(), depth=depth)
     store.insert_df(con, "order_book", ob)
     store.insert_df(con, "inst_state", st)
+    con.commit()
     store.insert_df(con, "delivery_price", fetch_delivery(bases))
     secs = time.time() - t0
     con.execute("UPDATE snapshots SET n_summary=?, n_depth=?, seconds=? WHERE snap_id=?", (len(summ), len(st), secs, snap_id))
@@ -263,10 +277,11 @@ if __name__ == "__main__":
     ap.add_argument("--max-m", type=float, default=2.5)
     ap.add_argument("--date")
     ap.add_argument("--base", default="SOL_USDC")
+    ap.add_argument("--summary-days", type=float, default=8.0, help="keep book_summary rows for expiries within N days (0 = all)")
     a = ap.parse_args()
     con = store.connect()
     if a.cmd == "snapshot":
-        snapshot(con, depth=a.depth, max_expiries=a.expiries, max_abs_m=a.max_m)
+        snapshot(con, depth=a.depth, max_expiries=a.expiries, max_abs_m=a.max_m, summary_max_days=(a.summary_days or None))
     elif a.cmd == "export":
         for f in store.export_parquet(con, a.date):
             print("wrote", f)

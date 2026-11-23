@@ -9,16 +9,15 @@ mkdir -p data/logs
 LOG=data/logs/daily.log
 case "$1" in
   trade)
-    "$PY" -m optiq_rwa.data.live snapshot >> $LOG 2>&1
+    # the 15-min snapshot job supplies quotes; running another snapshot here held the DB write lock (2026-11-21/22 trades failed)
     "$PY" -m optiq_rwa.paper.engine trade >> $LOG 2>&1
     ;;
   settle)
-    "$PY" -m optiq_rwa.data.live snapshot >> $LOG 2>&1
     "$PY" -m optiq_rwa.paper.engine settle >> $LOG 2>&1
     "$PY" -m optiq_rwa.paper.engine nav >> $LOG 2>&1
     "$PY" -m optiq_rwa.data.live export >> $LOG 2>&1
     "$PY" scripts/export_dashboard.py >> $LOG 2>&1 || true
-    scripts/publish_db.sh >> $LOG 2>&1
+    scripts/publish_data.sh >> $LOG 2>&1
     ;;
   *) echo "usage: daily.sh trade|settle"; exit 2;;
 esac
