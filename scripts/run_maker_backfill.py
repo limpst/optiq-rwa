@@ -49,7 +49,10 @@ for date, g in snaps.groupby("date"):
                                   (r.instrument_name, ts, int(r.expiration_ts)))
                 inv = r.instrument_name.split("-")[0] in ("BTC", "ETH")
                 conv = hist.underlying_price.fillna(r.spot).values if (inv and not hist.empty) else np.ones(len(hist))
-                px = (hist.ask_px.values if o["side"] == "buy" else hist.bid_px.values) * conv if not hist.empty else np.array([])
+                ask = pd.to_numeric(hist.ask_px, errors="coerce").values * conv if not hist.empty else np.array([])
+                bid = pd.to_numeric(hist.bid_px, errors="coerce").values * conv if not hist.empty else np.array([])
+                px = (ask if o["side"] == "buy" else bid)
+                hrs = (hist.ts_ms.values - ts) / 3.6e6 if not hist.empty else np.array([])
                 ok = ((px <= r.mid) if o["side"] == "buy" else (px >= r.mid)) & np.isfinite(px) if len(px) else np.array([], bool)
                 t_fill = (int(hist.ts_ms.iloc[int(np.argmax(ok))]) - ts) / 3.6e6 if ok.any() else np.nan
                 if ok.any():
@@ -61,12 +64,31 @@ for date, g in snaps.groupby("date"):
                 d = store.utc_date(int(r.expiration_ts))
                 dp = con.execute("SELECT price FROM delivery_price WHERE index_name=? AND date=?", (index_name_of(base), d)).fetchone()
                 payoff = (max(dp[0] - r.strike, 0) if r.kind == "call" else max(r.strike - dp[0], 0)) if dp else np.nan
+                # pegged variant: re-rest at the current mid every snapshot; filled when the next snapshot trades through it
+                mids = np.where(np.isfinite(ask) & np.isfinite(bid), (ask + bid) / 2, np.nan) if len(hist) else np.array([])
+                peg_fill, peg_adv, peg_h = False, np.nan, np.nan
+                prev_mid = float(r.mid)
+                for j in range(len(hist)):
+                    pj = ask[j] if o["side"] == "buy" else bid[j]
+                    crossed_j = (np.isfinite(pj) and ((pj <= prev_mid) if o["side"] == "buy" else (pj >= prev_mid)))
+                    if crossed_j:
+                        mf = mids[j] if np.isfinite(mids[j]) else pj
+                        peg_fill, peg_h = True, float(hrs[j])
+                        peg_adv = (prev_mid / mf - 1) if (o["side"] == "buy" and mf > 0) else ((mf / prev_mid - 1) if prev_mid > 0 else np.nan)
+                        break
+                    if np.isfinite(mids[j]):
+                        prev_mid = float(mids[j])
+                leg_rows.append(dict(date=date, strategy=name + " (pegged)", base=base, instrument=r.instrument_name, side=o["side"], m=round(float(r.m), 2),
+                                     mid=float(r.mid), ask=float(r.ask), bid=float(r.bid), n_snaps=len(hist), crossed=peg_fill,
+                                     hours_to_fill=peg_h, fill_mid=np.nan, adverse_pct=peg_adv, payoff=payoff, payback_mid=(payoff / r.mid) if (dp and r.mid > 0) else np.nan))
                 leg_rows.append(dict(date=date, strategy=name, base=base, instrument=r.instrument_name, side=o["side"], m=round(float(r.m), 2),
                                      mid=float(r.mid), ask=float(r.ask), bid=float(r.bid), n_snaps=len(hist), crossed=bool(ok.any()),
                                      hours_to_fill=t_fill, fill_mid=mid_fill, adverse_pct=adverse_pct, payoff=payoff, payback_mid=(payoff / r.mid) if (dp and r.mid > 0) else np.nan))
-            pkg = all(l["crossed"] for l in leg_rows) if leg_rows else False
-            for l in leg_rows:
-                l["package_filled"] = pkg
+            for nm in {l["strategy"] for l in leg_rows}:
+                grp = [l for l in leg_rows if l["strategy"] == nm]
+                pkg = all(l["crossed"] for l in grp)
+                for l in grp:
+                    l["package_filled"] = pkg
             rows += leg_rows
 df = pd.DataFrame(rows)
 out = pathlib.Path("results"); out.mkdir(exist_ok=True)
@@ -78,7 +100,7 @@ else:
     summ = df.groupby(["strategy", "side"]).agg(legs=("crossed", "size"), leg_fill=("crossed", "mean"), pkg_fill=("package_filled", "mean"),
                                                  hours_to_fill=("hours_to_fill", "median"), adverse_pct=("adverse_pct", "median"), payback_mid_filled=("payback_mid", lambda x: x[df.loc[x.index, "crossed"]].mean())).reset_index()
     lines.append(summ.round(3).to_markdown(index=False))
-    byb = df[df.strategy == "yield_calls"].groupby("base").agg(nights=("crossed", "size"), fill=("crossed", "mean"), h=("hours_to_fill", "median")).reset_index()
+    byb = df[df.strategy.isin(["yield_calls", "yield_calls (pegged)"])].groupby(["strategy", "base"]).agg(nights=("crossed", "size"), fill=("crossed", "mean"), h=("hours_to_fill", "median")).reset_index()
     lines.append("\n## yield_calls (m~1 call buy at mid) by base\n")
     lines.append(byb.round(2).to_markdown(index=False))
     lines.append("\n## nights\n")
