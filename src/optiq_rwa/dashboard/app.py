@@ -277,7 +277,14 @@ def build_bundle(con=None) -> dict:
     if not dc.empty:
         for (b, k), g in dc.groupby(["base", "kind"]):
             intr["decay"][f"{b}|{k}"] = [{"h": float(r.hours), "r": float(r.ratio)} for r in g.sort_values("hours").itertuples()]
+    try:
+        from ..paper.engine import STRATEGIES as _S
+        roster = [{"name": k, "base": v.get("base", k), "gate": bool(v.get("gate")), "gate_z": v.get("gate_z"), "maker": bool(v.get("maker")),
+                   "tp": v.get("tp"), "sl": v.get("sl"), "params": {kk: vv for kk, vv in v.items() if kk in ("m", "budget_mult", "short_m", "wing_m", "frac")}} for k, v in _S.items()]
+    except Exception:
+        roster = []
     paper = {
+        "roster": roster,
         "intraday": intr,
         "maker": maker,
         "gate": gate_rows,
