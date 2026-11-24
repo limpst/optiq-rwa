@@ -1,0 +1,5 @@
+coin,night,date,event,long_ret,short_pnl,short_prem,label,rule_label,ivrv,pb_mid60
+ETH,0,2026-11-20,False,-1.0,0.0026625,0.0026625,unknown,unknown,,
+ETH,1,2026-11-21,False,-1.0,0.0028000000000000004,0.0028000000000000004,unknown,unknown,,
+ETH,2,2026-11-22,False,-1.0,0.0028000000000000004,0.0028000000000000004,unknown,unknown,,
+ETH,3,2026-11-23,False,-1.0,0.0021000000000000003,0.0021000000000000003,unknown,unknown,,
